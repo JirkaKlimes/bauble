@@ -1,0 +1,15 @@
+services:
+  bauble:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8090:8090"
+    environment:
+      BAUBLE_URL: https://bauble.example.com
+      TZ: Europe/Prague
+      # BAUBLE_PREVIEW_BLOCK: home.example.com
+    volumes:
+      - bauble-data:/data
+
+volumes:
+  bauble-data: {}

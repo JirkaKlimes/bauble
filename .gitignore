@@ -1,0 +1,7 @@
+.dev/
+result
+result-*
+node_modules/
+web/dist/
+web/e2e/shots/
+__pycache__/
