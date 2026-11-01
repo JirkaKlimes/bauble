@@ -37,9 +37,17 @@ function joinsInRequest(e, path) {
 // The superuser dashboard is only served to direct connections (for example
 // an SSH tunnel), never to anything that came through cloudflared or a proxy.
 const PROXY_HEADERS = ["CF-Connecting-IP", "X-Forwarded-For", "Forwarded", "X-Real-IP"];
+// PocketBase finds collections by id or by name in any case, so the path is resolved, not matched.
+function superuserPath(path) {
+  if (path.indexOf("/_/") === 0) return true;
+  const m = path.match(/^\/api\/collections\/([^/]+)\//);
+  if (!m) return false;
+  const col = $app.findCachedCollectionByNameOrId(decodeURIComponent(m[1]));
+  return !!col && col.name === "_superusers";
+}
+
 function proxiedAdmin(e, path) {
-  if (path.indexOf("/_/") !== 0 && path.indexOf("/api/collections/_superusers/") !== 0) return false;
-  return PROXY_HEADERS.some((h) => e.request.header.get(h) !== "");
+  return superuserPath(path) && PROXY_HEADERS.some((h) => e.request.header.get(h) !== "");
 }
 
 function guard(e) {

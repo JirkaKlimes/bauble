@@ -467,7 +467,10 @@ try:
         proxied_status = res.status
 except urllib.error.HTTPError as e:
     proxied_status = e.code
-check("superuser login by collection id refused through a proxy", proxied_status in (403, 404), proxied_status)
+check("superuser login by collection id refused through a proxy", proxied_status == 404, proxied_status)
+for col in (su_id, "_Superusers"):
+    st = status_of(f"{BASE}/api/collections/{col}/auth-methods", {"CF-Connecting-IP": "203.0.113.9"})
+    check(f"superuser collection {col} hidden through a proxy", st == 404, st)
 s, r = call("POST", f"/api/collections/{su_id}/auth-with-password", {"identity": SU_EMAIL, "password": SU_PASSWORD})
 check("superuser login works directly", s == 200, (s, r))
 
