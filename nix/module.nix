@@ -30,8 +30,9 @@ let
 
   # Link previews fetch user-supplied URLs. PocketBase follows redirects and
   # resolves DNS without any hook, so private ranges are blocked here, at the
-  # socket. Loopback stays open because cloudflared or the reverse proxy
-  # connects over it.
+  # socket. Loopback cannot be listed: cloudflared or the reverse proxy
+  # connects over it, and IPAddressDeny filters both directions. The firewall
+  # rules below close loopback for new outgoing connections instead.
   privateRanges = [
     "0.0.0.0/8"
     "10.0.0.0/8"
@@ -45,6 +46,7 @@ let
     "fc00::/7"
     "fe80::/10"
     "ff00::/8"
+    "64:ff9b::/96"
   ];
 
   ctl = pkgs.writeShellApplication {
@@ -123,6 +125,10 @@ in
         assertion = lib.versionAtLeast cfg.pocketbase.version "0.39";
         message = "services.bauble needs PocketBase 0.39 or newer, got ${cfg.pocketbase.version}. Set services.bauble.pocketbase to a newer package.";
       }
+      {
+        assertion = config.networking.firewall.enable || config.networking.nftables.enable;
+        message = "services.bauble blocks link previews from reaching loopback services with firewall rules. Enable networking.firewall or networking.nftables.";
+      }
     ];
 
     users.users.bauble = {
@@ -190,6 +196,36 @@ in
         ];
       };
     };
+
+    # Replies to cloudflared are not new connections, so they pass. DNS stays
+    # open for resolvers on loopback (systemd-resolved, dnsmasq).
+    networking.nftables.tables.bauble-egress = lib.mkIf config.networking.nftables.enable {
+      family = "inet";
+      content = ''
+        chain output {
+          type filter hook output priority filter; policy accept;
+          oifname "lo" meta skuid "bauble" ct state new th dport 53 accept
+          oifname "lo" meta skuid "bauble" ct state new reject
+        }
+      '';
+    };
+    # the ruleset is checked at build time, where the bauble user does not exist
+    networking.nftables.preCheckRuleset = lib.mkIf config.networking.nftables.enable ''
+      sed -i 's/skuid "bauble"/skuid "nobody"/g' ruleset.conf
+    '';
+    networking.firewall.extraCommands = lib.mkIf (!config.networking.nftables.enable) ''
+      ip46tables -w -N bauble-egress 2>/dev/null || ip46tables -w -F bauble-egress
+      ip46tables -w -A bauble-egress -p udp --dport 53 -j RETURN
+      ip46tables -w -A bauble-egress -p tcp --dport 53 -j RETURN
+      ip46tables -w -A bauble-egress -m conntrack --ctstate NEW -j REJECT
+      ip46tables -w -C OUTPUT -o lo -m owner --uid-owner bauble -j bauble-egress 2>/dev/null \
+        || ip46tables -w -A OUTPUT -o lo -m owner --uid-owner bauble -j bauble-egress
+    '';
+    networking.firewall.extraStopCommands = lib.mkIf (!config.networking.nftables.enable) ''
+      ip46tables -w -D OUTPUT -o lo -m owner --uid-owner bauble -j bauble-egress 2>/dev/null || true
+      ip46tables -w -F bauble-egress 2>/dev/null || true
+      ip46tables -w -X bauble-egress 2>/dev/null || true
+    '';
 
     environment.systemPackages = [ ctl ];
   };

@@ -22,6 +22,8 @@ export function pocketbaseStore(): Store {
 
   const photoUrl = (r: RecordModel) => (r.avatar ? pb.files.getURL(r, str(r.avatar), { thumb: '512x512', token: fileToken }) : null);
   const refreshToken = async () => { fileToken = await pb.files.getToken().catch(() => fileToken); };
+  // file tokens last a day (see the hardening migration); new image URLs must not carry an expired one
+  setInterval(() => { if (pb.authStore.isValid) void refreshToken(); }, 60 * 60 * 1000);
 
   function member(r: RecordModel): Member {
     const slot = int(r.slot), name = str(r.name) || '?';
@@ -39,7 +41,7 @@ export function pocketbaseStore(): Store {
     return {
       id: r.id as WishId, owner: str(r.owner) as MemberId, title: str(r.title), url: str(r.url), store: str(r.store),
       price: int(r.price) || null, note: str(r.note), pr, art: isArt(art) ? art : 'gift', imageUrl: str(r.image_url),
-      img: r.image ? pb.files.getURL(r, str(r.image), { thumb: '160x160' }) : '',
+      img: r.image ? pb.files.getURL(r, str(r.image), { thumb: '160x160', token: fileToken }) : '',
       gone: r.gone === 'deleted' || r.gone === 'got' ? r.gone : null,
     };
   }
@@ -113,7 +115,7 @@ export function pocketbaseStore(): Store {
     async updateProfile(me, p) {
       const fd = new FormData();
       fd.append('name', p.name); fd.append('voc', p.voc); fd.append('ins', p.ins); fd.append('gen', p.gen);
-      fd.append('bday_day', String(p.bday.day)); fd.append('bday_month', String(p.bday.month));
+      if (p.bday) { fd.append('bday_day', String(p.bday.day)); fd.append('bday_month', String(p.bday.month)); }
       if (p.photo) fd.append('avatar', p.photo, 'avatar.jpg');
       const r = await pb.collection('users').update(me, fd);
       await refreshToken();

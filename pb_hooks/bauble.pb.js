@@ -22,15 +22,24 @@ onRecordDeleteRequest((e) => require(`${__hooks}/lib/wishes.js`).softDelete(e), 
 
 onRecordCreateRequest((e) => {
   require(`${__hooks}/lib/wishes.js`).attachImage(e.record, "");
-  e.next();
+  return require(`${__hooks}/lib/images.js`).guardUpload(e, "image");
 }, "wishes");
 
 onRecordUpdateRequest((e) => {
   require(`${__hooks}/lib/wishes.js`).attachImage(e.record, e.record.original().getString("image_url"));
-  e.next();
+  return require(`${__hooks}/lib/images.js`).guardUpload(e, "image");
 }, "wishes");
 
+onRecordUpdateRequest((e) => require(`${__hooks}/lib/images.js`).guardUpload(e, "avatar"), "users");
+
 cronAdd("bauble_purge", "*/10 * * * *", () => require(`${__hooks}/lib/wishes.js`).purge());
+
+// Members set their birthday once; moving it would move the reveal of their gifts.
+$app.rootCmd.addCommand(new Command({
+  use: "birthday <email> <day> <month>",
+  short: "Change a member's birthday",
+  run: (_cmd, args) => require(`${__hooks}/lib/invites.js`).cliBirthday(args),
+}));
 
 $app.rootCmd.addCommand(new Command({
   use: "invite [admin|member] [note]",

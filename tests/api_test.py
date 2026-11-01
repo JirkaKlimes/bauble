@@ -7,11 +7,13 @@ Use tests/run_api_tests.sh, which sets up a throwaway database.
 
 import datetime
 import json
+import struct
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 from typing import Any
 
 BASE = sys.argv[1].rstrip("/")
@@ -76,6 +78,41 @@ def next_occasions(user_id, bd, bm):
         occ.append((datetime.date(y, 12, 24), f"xmas-{y}"))
         occ.append((datetime.date(y, bm, bd), f"bday-{user_id}-{y}"))
     return [o for d, o in sorted(occ) if d >= today][:2]
+
+
+def png(width, height):
+    """A PNG header declaring width x height, with a tiny body: enough for type and size checks."""
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 0, 0, 0, 0)
+    body = zlib.compress(b"\x00" * (width + 1)) if width * height <= 64 else zlib.compress(b"\x00" * 64)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", body) + chunk(b"IEND", b"")
+
+
+def upload(method, path, fields, files, token):
+    boundary = "bauble-test-boundary"
+    parts = []
+    for k, v in fields.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode())
+    for k, (name, data) in files.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"; filename="{name}"\r\nContent-Type: image/png\r\n\r\n'.encode() + data + b"\r\n")
+    data = b"".join(parts) + f"--{boundary}--\r\n".encode()
+    req = urllib.request.Request(BASE + path, data=data, method=method)
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Authorization", token)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return r.status, json.loads(r.read().decode() or "null")
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode() or "null")
+
+
+def status_of(url, headers=None):
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=20) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
 
 
 print("invites")
@@ -386,6 +423,54 @@ for url in [
 s, r = call("GET", "/api/bauble/preview?url=https://example.com/")
 check("preview needs auth", s in (401, 403), (s, r))
 
+print("review findings")
+escaped = json.dumps({"query": {"filter": 'title != "" || claims\\u005fvia\\u005fwish.id = ""'}})
+s, r = call("POST", "/api/realtime", {"clientId": "x", "subscriptions": ["wishes/*?options=" + urllib.parse.quote(escaped)]}, mom_t)
+check("realtime options with escapes refused", s == 400, (s, r))
+
+s, r = upload("POST", records("wishes"), {"owner": mom["id"], "title": "Huge", "pr": "nice"}, {"image": ("bomb.png", png(20000, 20000))}, mom_t)
+check("image declaring 20000x20000 px refused", s == 400 and r.get("code") == "image_too_large", (s, r))
+s, r = upload("PATCH", records("users", f"/{mom['id']}"), {}, {"avatar": ("bomb.png", png(20000, 20000))}, mom_t)
+check("avatar declaring 20000x20000 px refused", s == 400 and r.get("code") == "image_too_large", (s, r))
+s, w5 = upload("POST", records("wishes"), {"owner": mom["id"], "title": "Scarf", "pr": "nice"}, {"image": ("scarf.png", png(4, 4))}, mom_t)
+check("small image accepted", s == 200 and w5.get("image"), (s, w5))
+s, c5 = call("POST", "/api/bauble/claims", {"wish": w5["id"]}, alex_t)
+call("DELETE", records("wishes", f"/{w5['id']}"), None, mom_t)
+call("POST", "/api/crons/bauble_purge", {}, su["token"])
+time.sleep(0.5)
+file_url = f"{BASE}/api/files/wishes/{w5['id']}/{w5['image']}"
+s, mom_ft = call("POST", "/api/files/token", {}, mom_t)
+s, alex_ft = call("POST", "/api/files/token", {}, alex_t)
+check("wish image needs a file token", status_of(file_url) == 404)
+check("owner cannot read the image of a removed wish", status_of(f"{file_url}?token={mom_ft['token']}") == 404)
+check("buyer still reads it", status_of(f"{file_url}?token={alex_ft['token']}") == 200)
+
+s, r = call("PATCH", records("users", f"/{mom['id']}"), {"bday_day": 1, "bday_month": 11}, mom_t)
+check("birthday cannot be moved once set", s in (400, 403, 404), (s, r))
+s, invb = call("POST", records("invites"), {"role": "member"}, alex_t)
+s, r = call("POST", "/api/bauble/join", {"token": invb["token"], "name": "Nobday", "email": "nobday@example.com", "password": "password123"})
+nb_t, nb = r["token"], r["record"]
+s, r = call("PATCH", records("users", f"/{nb['id']}"), {"bday_day": 3, "bday_month": 4}, nb_t)
+check("birthday can be set once", s == 200 and r["bday_month"] == 4, (s, r))
+s, r = call("PATCH", records("users", f"/{nb['id']}"), {"bday_day": 4, "bday_month": 4}, nb_t)
+check("and then not changed", s in (400, 403, 404), (s, r))
+
+su_id = su["record"]["collectionId"]
+proxied = urllib.request.Request(
+    BASE + f"/api/collections/{su_id}/auth-with-password",
+    data=json.dumps({"identity": SU_EMAIL, "password": SU_PASSWORD}).encode(),
+    headers={"Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9"},
+    method="POST",
+)
+try:
+    with urllib.request.urlopen(proxied, timeout=20) as res:
+        proxied_status = res.status
+except urllib.error.HTTPError as e:
+    proxied_status = e.code
+check("superuser login by collection id refused through a proxy", proxied_status in (403, 404), proxied_status)
+s, r = call("POST", f"/api/collections/{su_id}/auth-with-password", {"identity": SU_EMAIL, "password": SU_PASSWORD})
+check("superuser login works directly", s == 200, (s, r))
+
 print("headers")
 with urllib.request.urlopen(BASE + "/api/health") as res:
     csp = res.headers.get("Content-Security-Policy", "")
@@ -402,6 +487,7 @@ try:
 except urllib.error.HTTPError as e:
     status = e.code
 check("dashboard refused through a proxy", status == 404, status)
+time.sleep(3.1)  # *:auth allows 2 requests per 3 s
 s, r = call("POST", "/api/collections/_superusers/auth-with-password", {"identity": SU_EMAIL, "password": SU_PASSWORD})
 check("dashboard reachable directly", s == 200, (s, r))
 

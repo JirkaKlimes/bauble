@@ -3,7 +3,8 @@ import type { Birthday, Claim, ClaimId, Family, Invite, InviteId, InviteInfo, Me
 export type WishDraft = Pick<Wish, 'title' | 'url' | 'store' | 'price' | 'note' | 'pr' | 'art' | 'imageUrl'>;
 export type WishPatch = Partial<Pick<Wish, 'title' | 'price' | 'note' | 'pr' | 'art'>>;
 
-export type ProfilePatch = { name: string; voc: string; ins: string; gen: string; bday: Birthday; photo: Blob | null };
+/** `bday` is null once a birthday is set: only an admin can move it, or the owner could move their own reveal. */
+export type ProfilePatch = { name: string; voc: string; ins: string; gen: string; bday: Birthday | null; photo: Blob | null };
 export type JoinData = { token: string; name: string; voc: string; ins: string; gen: string; email: string; password: string; bday: Birthday };
 
 export type LeaveResult = { claim: Claim | null; wishDeleted: boolean };

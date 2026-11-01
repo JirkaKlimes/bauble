@@ -83,4 +83,14 @@ function cli(args) {
   console.log("");
 }
 
-module.exports = { check: handle(check), defaults, join: handle(join), cli };
+function cliBirthday(args) {
+  const day = parseInt(args[1], 10), month = parseInt(args[2], 10);
+  if (args.length !== 3 || !(day >= 1 && day <= 31 && month >= 1 && month <= 12)) throw new Error("usage: birthday <email> <day> <month>");
+  const user = $app.findAuthRecordByEmail("users", String(args[0]).toLowerCase());
+  user.set("bday_day", day);
+  user.set("bday_month", month);
+  $app.save(user);
+  console.log("  " + user.getString("name") + ": birthday " + day + ". " + month + ".");
+}
+
+module.exports = { check: handle(check), defaults, join: handle(join), cli, cliBirthday };

@@ -223,6 +223,7 @@ export const en = {
     demoPortrait: 'Use a drawn portrait for the demo',
     bdayTitle: 'When is your birthday?',
     bdayLead: 'So we know when to bring presents outside Christmas.',
+    bdayLocked: 'Only an admin can change your birthday, so nobody can move the day their presents are revealed.',
     day: 'Day',
     month: 'Month',
     hang: 'Hang the ornament',

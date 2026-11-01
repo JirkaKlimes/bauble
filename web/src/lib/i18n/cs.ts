@@ -222,6 +222,7 @@ export const cs: Dict = {
     demoPortrait: 'Pro ukázku použít kreslený portrét',
     bdayTitle: 'Kdy máš narozeniny?',
     bdayLead: 'Ať víme, kdy ti nosit dárky i mimo Vánoce.',
+    bdayLocked: 'Narozeniny může změnit jen správce, aby si nikdo nepřesunul den, kdy uvidí svoje dárky.',
     day: 'Den',
     month: 'Měsíc',
     hang: 'Pověsit ozdobu',

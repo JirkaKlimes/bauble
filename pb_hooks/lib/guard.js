@@ -25,9 +25,11 @@ function joinsInRequest(e, path) {
     const q = e.request.url.query();
     return ["filter", "sort", "expand"].some((k) => JOIN.test(q.get(k)));
   }
+  // Subscription options are JSON, where "\u005f" spells "_" only after this
+  // check. The web client never sends options, so none are accepted.
   if (path === "/api/realtime" && e.request.method === "POST") {
     const subs = (e.requestInfo().body || {}).subscriptions || [];
-    return subs.some((s) => { try { return JOIN.test(decodeURIComponent(String(s))); } catch (_) { return true; } });
+    return subs.some((s) => String(s).indexOf("?") >= 0);
   }
   return false;
 }
@@ -52,6 +54,7 @@ function guard(e) {
     h.set("X-Content-Type-Options", "nosniff");
     h.set("Referrer-Policy", "no-referrer");
     h.set("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+    h.set("Strict-Transport-Security", "max-age=31536000");
   }
   return e.next();
 }

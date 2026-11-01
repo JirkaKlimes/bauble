@@ -1,6 +1,7 @@
 /// <reference path="../../.dev/pb_data/types.d.ts" />
 
 const { fetchURL, allowedURL } = require(`${__hooks}/lib/net.js`);
+const { acceptable } = require(`${__hooks}/lib/images.js`);
 
 // Every owner delete is a soft delete, with or without buyers. A hard delete
 // only for unclaimed wishes would let the owner tell the two apart (404 vs 200
@@ -20,7 +21,7 @@ function purge() {
   }
 }
 
-const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 // Download the product image once, so the list never hotlinks shops.
 function attachImage(record, previous) {
@@ -29,7 +30,7 @@ function attachImage(record, previous) {
   try {
     const res = fetchURL(u, "image/avif,image/webp,image/*", 12);
     const type = String((res.headers["Content-Type"] || [""])[0]).split(";")[0].trim().toLowerCase();
-    if (res.statusCode >= 400 || IMAGE_TYPES.indexOf(type) < 0 || res.body.length > 5 * 1024 * 1024 || res.body.length < 200) return;
+    if (res.statusCode >= 400 || IMAGE_TYPES.indexOf(type) < 0 || res.body.length > 5 * 1024 * 1024 || res.body.length < 200 || !acceptable(res.body)) return;
     record.set("image", $filesystem.fileFromBytes(res.body, "product." + type.split("/")[1].replace("jpeg", "jpg")));
   } catch (err) {
     console.log("bauble: image download failed:", String(err));

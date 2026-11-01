@@ -137,18 +137,28 @@ edited. Product images are downloaded once and served from PocketBase.
 
 ## Security notes
 
-- Claim secrecy is enforced by access rules, not by the client. Client queries may not join
-  through back-relations (`*_via_*`, `@collection`), because a sort over a hidden relation still
-  changes which rows come back.
-- Link previews fetch URLs that members paste. The hooks reject private and local addresses, but
-  PocketBase follows redirects and resolves DNS on its own, so the NixOS module also blocks private
-  ranges (RFC 1918, CGNAT/tailnet, link-local) at the socket with `IPAddressDeny`. Loopback stays
-  open for the tunnel. With Docker, add your own egress filter, or accept that family members can
-  make the server send GET requests into your network.
+- Claim secrecy is enforced by the server, not the client. The owner of a wish gets the same
+  answers whether or not someone is buying it: deletes are always soft, removed wishes and their
+  images are unreadable for the owner, and claim ids look like missing records.
+- Client queries may not join through back-relations (`*_via_*`, `@collection`), and realtime
+  subscriptions may not carry options. A sort or filter over a hidden relation still changes which
+  rows come back.
+- A birthday can be set once. Moving it to today would reveal tonight who buys what. Admins
+  correct it with `bauble-ctl birthday <email> <day> <month>`.
+- Uploaded and downloaded images are checked from their header (at most 6000 px a side and
+  24 megapixels) before PocketBase decodes them for thumbnails.
+- Link previews fetch URLs that members paste. PocketBase follows redirects and resolves DNS on its
+  own, so the hooks' URL check is not enough. The NixOS module also blocks private and tailnet
+  ranges at the socket (`IPAddressDeny`) and new loopback connections from the service user with
+  a firewall rule, DNS excepted. With Docker, add your own egress filter, or accept that family
+  members can make the server send GET requests into your network.
+- A preview response is read whole before it is truncated, so a member can make the service hit
+  `MemoryMax` and restart. PocketBase has no limit on that read.
 - `previewBlocklist` (`BAUBLE_PREVIEW_BLOCK`) blocks public names of internal services.
+- The superuser API answers on loopback only. Use `bauble-ctl` or an SSH tunnel.
 - Rate limits are on. PocketBase trusts the `CF-Connecting-IP` header for client IPs. Without
   Cloudflare in front, clear it in the dashboard (Settings, Trusted proxy).
-- Responses carry a strict Content-Security-Policy.
+- Responses carry a strict Content-Security-Policy and HSTS.
 
 ## Develop
 

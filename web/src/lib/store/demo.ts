@@ -103,7 +103,7 @@ export function demoStore(current: () => Family): Store {
     async updateProfile(me, p) {
       const m = current().members.find(x => x.id === me);
       if (!m) throw new Error('no member');
-      return { ...m, name: p.name, voc: p.voc, ins: p.ins, gen: p.gen, bday: p.bday };
+      return { ...m, name: p.name, voc: p.voc, ins: p.ins, gen: p.gen, bday: p.bday ?? m.bday };
     },
     claim: async (wish, occ, id) => ({ id, wish, by: [DEMO_ME], occ, revealed: false }),
     joinClaim: claimById,

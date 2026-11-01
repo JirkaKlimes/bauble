@@ -20,6 +20,7 @@
   type Step = 1 | 2 | 3 | 4;
   const steps: Step[] = flow.kind === 'join' ? [1, 2, 3, 4] : [1, 2, 3];
   const me = flow.kind === 'edit' ? app.meMember : undefined;
+  const bdayLocked = !!me?.bday;
   const cs = () => i18n.locale === 'cs';
 
   let step = $state<Step>(1);
@@ -161,7 +162,7 @@
     try {
       const f = cs() || n !== m.name ? forms(n) : { voc: m.voc, ins: m.ins, gen: m.gen };
       const photo = shotChanged && shot ? await canvasBlob(shot) : null;
-      await app.saveProfile({ name: n, ...f, bday: { day, month }, photo }, shotChanged && shot ? photoPortrait(shot, m.glass) : null);
+      await app.saveProfile({ name: n, ...f, bday: bdayLocked ? null : { day, month }, photo }, shotChanged && shot ? photoPortrait(shot, m.glass) : null);
     } catch (err) { app.toastError(err); }
     finally { busy = false; }
   }
@@ -290,10 +291,10 @@
     {:else if step === 3}
       <section class="ob-step" bind:this={stepEl}>
         <h2 id="obTitle3">{t.bdayTitle}</h2>
-        <p>{t.bdayLead}</p>
+        <p>{bdayLocked ? t.bdayLocked : t.bdayLead}</p>
         <div class="bday">
-          <label>{t.day}<select class="field" id="bdDay" bind:value={day} bind:this={dayEl}>{#each Array.from({ length: 31 }, (_, i) => i + 1) as d (d)}<option value={d}>{d}.</option>{/each}</select></label>
-          <label>{t.month}<select class="field" id="bdMonth" bind:value={month}>{#each months as mn, i (i)}<option value={i + 1}>{mn}</option>{/each}</select></label>
+          <label>{t.day}<select class="field" id="bdDay" bind:value={day} bind:this={dayEl} disabled={bdayLocked}>{#each Array.from({ length: 31 }, (_, i) => i + 1) as d (d)}<option value={d}>{d}.</option>{/each}</select></label>
+          <label>{t.month}<select class="field" id="bdMonth" bind:value={month} disabled={bdayLocked}>{#each months as mn, i (i)}<option value={i + 1}>{mn}</option>{/each}</select></label>
         </div>
         <button class="btn-gold" id="obFinish" type="button" disabled={busy} onclick={finish}>
           {#if flow.kind === 'join'}{t.next}{:else if flow.kind === 'edit'}<Icon name="check" />{t.save}{:else}<Icon name="sparkle" />{t.hang}{/if}
