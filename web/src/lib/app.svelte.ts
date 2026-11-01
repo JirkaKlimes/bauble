@@ -62,6 +62,9 @@ class App {
   constructor() {
     this.store = this.demo ? demoStore(() => this.family) : pocketbaseStore();
     addEventListener('pagehide', () => this.flushOps());
+    // the system back gesture closes an open list instead of leaving the app
+    if (history.state?.panel) history.replaceState(null, '');
+    addEventListener('popstate', () => { if (this.phase === 'focus') this.closePanel(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') this.flushOps(); });
     setInterval(() => this.tickDay(), 60000);
     if (this.demo) i18n.onChange(() => this.resetDemo());
@@ -277,6 +280,7 @@ class App {
     if (!this.member(id)) return;
     this.finishIntro(); this.tmOpen = false;
     const was = this.phase;
+    if (was !== 'focus') history.pushState({ panel: true }, '');
     this.phase = 'focus'; this.focus = id; this.editing = null;
     this.scrollToReveal = !!opts.reveal;
     this.scene?.focus(id, was === 'focus');
@@ -287,6 +291,7 @@ class App {
   closePanel(instant = false) {
     if (this.phase !== 'focus') return;
     this.phase = 'home'; this.focus = null; this.editing = null;
+    if (history.state?.panel) history.back();
     if (instant) { this.scene?.setInteraction('home'); return; }
     this.scene?.home();
     showChrome();

@@ -297,6 +297,8 @@ async def main() -> None:
         await shot(admin, "7-admin-sees-gone")
 
         await solo(member)
+        # on a phone the profile tools sit behind the "more" button
+        await member.click(".ph-tools-btn")
         await member.locator('.ph-actions .lang button[lang="en"]').click()
         await expect(member.locator(".ph-kicker")).to_have_text("Your wishes")
         check(
@@ -307,6 +309,10 @@ async def main() -> None:
         await member.locator('.ph-actions .lang button[lang="cs"]').click()
         await expect(member.locator(".ph-kicker")).to_have_text("Tvoje přání")
         check(True, "language switch en to cs")
+        url = member.url
+        await member.evaluate("history.back()")
+        await member.wait_for_selector("#panel", state="hidden", timeout=30_000)
+        check(member.url == url, "back gesture closes the list and stays in the app")
 
         demo = await page(browser)
         await solo(demo)

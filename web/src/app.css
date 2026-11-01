@@ -186,7 +186,9 @@ button.up-chip:hover{border-color:color-mix(in srgb,var(--accent) 60%,transparen
 .strip .avatar .hat{display:none!important}
 .ph-who{display:flex;align-items:flex-end;gap:16px}
 .ph-who .avatar{margin-bottom:4px}
-.ph-names{min-width:0}
+.ph-title{margin:0;min-width:0;font-weight:inherit}
+.ph-title>span{display:block}
+.ph-tools-btn{display:none}
 .ph-kicker{margin:0;font-family:var(--font-display);font-style:italic;font-size:18px;line-height:1.2;color:var(--frost);font-variation-settings:var(--soft),"opsz" 24}
 .ph-name{margin:0;padding-bottom:.08em;font-family:var(--font-display);font-weight:500;font-size:50px;line-height:1.04;letter-spacing:-.02em;color:var(--snow);
   font-variation-settings:var(--soft),"opsz" 144;overflow-wrap:anywhere}
@@ -195,9 +197,14 @@ button.up-chip:hover{border-color:color-mix(in srgb,var(--accent) 60%,transparen
 .ph-sub svg{width:16px;height:16px;color:var(--accent)}
 .ph-sub b{color:var(--accent-hi);font-weight:600;font-variant-numeric:tabular-nums;display:inline-block}
 .ph-sub .cel-badge{padding:3px 11px 3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-hi);font-weight:600}
-.ph-secret{margin:0;display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;color:var(--snow);
-  padding:11px 14px;border-radius:14px;background:color-mix(in srgb,var(--accent) 9%,transparent);border:1px solid color-mix(in srgb,var(--accent) 20%,transparent)}
-.ph-secret svg{width:18px;height:18px;color:var(--accent);margin-top:1px}
+.ph-actions{display:flex;flex-wrap:wrap;gap:8px}
+.pill-btn{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 15px 0 12px;border-radius:999px;
+  border:1px solid color-mix(in srgb,var(--frost) 30%,transparent);background:rgba(255,255,255,.04);color:var(--snow);font-size:13.5px;font-weight:600;
+  transition:border-color .2s,background .2s}
+.pill-btn:hover{border-color:color-mix(in srgb,var(--accent) 60%,transparent);background:rgba(255,255,255,.08)}
+.pill-btn svg{width:16px;height:16px;color:var(--accent)}
+.ph-secret{margin:-4px 0 18px 30px;display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.45;color:var(--frost)}
+.ph-secret svg{width:16px;height:16px;color:var(--accent);margin-top:2px}
 .p-scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 22px 40px 14px;-webkit-overflow-scrolling:touch;
   scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--accent) 30%,transparent) transparent}
 .sec-title{margin:6px 0 12px 30px;font-family:var(--font-display);font-style:italic;font-weight:500;font-size:19px;color:var(--frost);font-variation-settings:var(--soft),"opsz" 24}
@@ -472,12 +479,23 @@ select.field option{background:#0d1433;color:var(--snow)}
     border-radius:28px 28px 0 0;border-bottom:0;padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);
     will-change:transform;touch-action:none}
   .panel[data-detent="medium"] .p-scroll{overflow:hidden}
-  .grab{display:block;flex:none;width:100%;height:24px;border:0;background:none;padding:0;position:relative}
-  .grab::before{content:"";position:absolute;left:50%;top:10px;width:46px;height:5px;margin-left:-23px;border-radius:3px;background:color-mix(in srgb,var(--frost) 50%,transparent)}
-  .ph{padding:2px 18px 14px;gap:12px}
-  .ph-name{font-size:42px}
-  .avatar.lg{width:56px;height:56px}
-  .p-scroll{padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 40px) 8px}
+  .grab{display:block;flex:none;width:100%;height:18px;border:0;background:none;padding:0;position:relative}
+  .grab::before{content:"";position:absolute;left:50%;top:7px;width:46px;height:5px;margin-left:-23px;border-radius:3px;background:color-mix(in srgb,var(--frost) 50%,transparent)}
+  .ph{padding:0 16px 10px;gap:6px}
+  .ph-who .avatar{display:none}
+  .ph-title{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:9px}
+  .ph-title .ph-kicker{font-size:17px}
+  .ph-name{font-size:32px;line-height:1.1}
+  .ph.mine .ph-name{display:none}
+  .ph.mine .ph-kicker{font-style:normal;font-weight:500;font-size:32px;line-height:1.1;letter-spacing:-.02em;color:var(--snow);font-variation-settings:var(--soft),"opsz" 144}
+  .ph-sub{font-size:13px}
+  #pCount,.ph-sub .gift-chip,.ph.mine .ph-bday{display:none}
+  .ph.mine .ph-sub:not(:has(.cel-badge)){display:none}
+  .ph-tools-btn{display:grid;margin-left:auto}
+  .ph-tools-btn[aria-expanded="true"]{background:color-mix(in srgb,var(--accent) 22%,transparent);border-color:color-mix(in srgb,var(--accent) 60%,transparent)}
+  .ph-actions{display:none}
+  .ph-actions.open{display:flex;padding-top:4px}
+  .p-scroll{padding:12px 16px calc(env(safe-area-inset-bottom,0px) + 40px) 8px}
   .tag{padding:14px 14px 10px 38px}
   .tag-body{grid-template-columns:52px minmax(0,1fr) auto;gap:12px}
   .tag-wrap[data-state="mine"] .tag-body,.tag-wrap[data-state="others"] .tag-body,.tag-wrap[data-state="wrapped"] .tag-body{grid-template-columns:52px minmax(0,1fr) 30px}
@@ -494,12 +512,6 @@ select.field option{background:#0d1433;color:var(--snow)}
   .tag,.tag-wrap:hover .tag{transition:none}
 }
 
-.ph-actions{display:flex;flex-wrap:wrap;gap:8px}
-.pill-btn{display:inline-flex;align-items:center;gap:7px;min-height:40px;padding:0 15px 0 12px;border-radius:999px;
-  border:1px solid color-mix(in srgb,var(--frost) 30%,transparent);background:rgba(255,255,255,.04);color:var(--snow);font-size:13.5px;font-weight:600;
-  transition:border-color .2s,background .2s}
-.pill-btn:hover{border-color:color-mix(in srgb,var(--accent) 60%,transparent);background:rgba(255,255,255,.08)}
-.pill-btn svg{width:16px;height:16px;color:var(--accent)}
 
 .tag-art.has-img{overflow:hidden;background:#fffdf8;border-color:rgba(56,41,26,.32);padding:4px}
 .tag-art img{width:100%;height:100%;object-fit:contain;display:block;border-radius:8px}
@@ -578,5 +590,6 @@ body.focus .preview-pill{display:none}
 .lang button{border:0;background:none;min-height:34px;padding:0 12px;border-radius:999px;color:var(--frost);font-size:13px;font-weight:600}
 .lang button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
 .lang button:hover:not([aria-pressed="true"]){color:var(--snow)}
+@media (max-width:760px){.lang button{min-height:44px}}
 .ob-lang{display:flex;justify-content:center;margin-top:18px}
 .auth-card .ob-lang{justify-content:flex-start}

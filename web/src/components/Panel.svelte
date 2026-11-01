@@ -24,6 +24,7 @@
   let open = $state(false);
   let detent = $state<Detent>('medium');
   let scrolled = $state(false);
+  let tools = $state(false);
 
   const dim = () => document.getElementById('dim');
   const H = () => innerHeight;
@@ -67,7 +68,7 @@
     if (reduced || !panel) return;
     gsap.from(panel.querySelectorAll('#tagList > li'), { y: 28, rotation: -5, opacity: 0, duration: 0.75, ease: 'back.out(1.6)', stagger: 0.07, delay, transformOrigin: '0% 50%', clearProps: 'transform,opacity' });
     gsap.from(panel.querySelectorAll('#composer, #reveal'), { y: 16, opacity: 0, duration: 0.6, ease: 'power3.out', delay: Math.max(0, delay - 0.08), clearProps: 'transform,opacity' });
-    gsap.from(panel.querySelectorAll('.ph-who, .ph-sub, .ph-secret'), { y: 10, opacity: 0, duration: 0.6, ease: 'power3.out', stagger: 0.05, delay: Math.max(0, delay - 0.15), clearProps: 'transform,opacity' });
+    gsap.from(panel.querySelectorAll('.ph-who, .ph-sub'), { y: 10, opacity: 0, duration: 0.6, ease: 'power3.out', stagger: 0.05, delay: Math.max(0, delay - 0.15), clearProps: 'transform,opacity' });
   }
 
   function hide(instant: boolean, returnTo: MemberId | null) {
@@ -90,7 +91,7 @@
     if (f === prev) return;
     const was = prev;
     prev = f;
-    if (f) { shownId = f; scrolled = false; void show(!was); }
+    if (f) { shownId = f; scrolled = false; tools = false; void show(!was); }
     else hide(app.phase !== 'home', was);
   });
 
@@ -188,7 +189,7 @@
   id="panel"
   role="dialog"
   aria-modal="false"
-  aria-labelledby="pName"
+  aria-labelledby="pTitle"
   tabindex="-1"
   hidden={!open}
   bind:this={panel}
@@ -201,7 +202,7 @@
   {#if m && shownId}
     <button class="grab" type="button" aria-label={t.panel.resize} onpointerdown={grabPointer}
       onclick={() => { if (isMobile()) setDetent(detent === 'large' ? 'medium' : 'large'); }}></button>
-    <header class="ph" class:scrolled id="pHead">
+    <header class="ph" class:mine class:scrolled id="pHead">
       <div class="ph-row">
         <button class="icon-btn" id="pClose" type="button" aria-label={t.panel.close} bind:this={closeBtn} onclick={() => app.closePanel()}><Icon name="close" /></button>
         {#if app.family.members.length > 1}
@@ -212,16 +213,19 @@
             {/each}
           </nav>
         {/if}
+        {#if mine}
+          <button class="icon-btn ph-tools-btn" type="button" aria-label={t.panel.tools} aria-expanded={tools} aria-controls="pTools" onclick={() => (tools = !tools)}><Icon name="more" /></button>
+        {/if}
       </div>
       <div class="ph-who">
         <Avatar id={shownId} size="lg" />
-        <div class="ph-names"><p class="ph-kicker">{mine ? t.panel.yourWishes : t.panel.wishesFor}</p><h2 class="ph-name" id="pName">{m.name}</h2></div>
+        <h2 class="ph-title" id="pTitle"><span class="ph-kicker">{mine ? t.panel.yourWishes : t.panel.wishesFor}</span> <span class="ph-name" id="pName">{m.name}</span></h2>
       </div>
       <p class="ph-sub">
         {#if cel}
           <span class="cel-badge"><Icon name="cake" />{st.diff === 0 ? t.panel.celebratesToday : st.diff < 0 ? t.panel.wasYesterday : t.panel.celebrates(t.inDays(st.diff))}</span>
         {:else if nb}
-          <span><Icon name="cake" />{t.panel.birthday(longDate(nb.day))}</span>
+          <span class="ph-bday"><Icon name="cake" />{t.panel.birthday(longDate(nb.day))}</span>
         {/if}
         <span id="pCount">{t.panel.count(count)}</span>
         {#if st.mode !== 'quiet'}
@@ -229,14 +233,13 @@
         {/if}
       </p>
       {#if mine}
-        <div class="ph-actions">
+        <div class="ph-actions" id="pTools" class:open={tools}>
           <button class="pill-btn" type="button" data-pa="profile" onclick={() => app.startOnboarding({ kind: 'edit' })}><Icon name="pencil" />{t.panel.editProfile}</button>
           {#if app.isAdmin}
             <button class="pill-btn" type="button" data-pa="invite" onclick={() => (app.modal = { kind: 'invites' })}><Icon name="user-plus" />{t.panel.invite}</button>
           {/if}
           <LangSwitch />
         </div>
-        <p class="ph-secret"><Icon name="sparkle" /><span>{st.mode === 'xmas' && st.phase !== 'after' ? t.panel.secretXmas : t.panel.secretParty}</span></p>
       {/if}
     </header>
     <div class="p-scroll" id="pScroll" bind:this={scroller} onscroll={() => (scrolled = (scroller?.scrollTop ?? 0) > 4)}>
@@ -244,6 +247,7 @@
         <Reveal />
         <Composer onfocusfield={() => { if (isMobile() && detent !== 'large') setDetent('large'); }} />
         <h3 class="sec-title">{t.panel.onList}</h3>
+        <p class="ph-secret"><Icon name="sparkle" /><span>{st.mode === 'xmas' && st.phase !== 'after' ? t.panel.secretXmas : t.panel.secretParty}</span></p>
       {/if}
       <ul class="tags" id="tagList">
         {#each list as w, i (app.keyOf(w.id))}

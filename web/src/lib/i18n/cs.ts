@@ -87,6 +87,7 @@ export const cs: Dict = {
   },
 
   panel: {
+    tools: 'Profil a jazyk',
     resize: 'Zvětšit nebo zmenšit panel',
     close: 'Zavřít',
     family: 'Rodina',

@@ -88,6 +88,7 @@ export const en = {
   },
 
   panel: {
+    tools: 'Profile and language',
     resize: 'Make the panel bigger or smaller',
     close: 'Close',
     family: 'Family',
