@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import { openWishesOf } from '../lib/domain/claims';
-  import { occsFor } from '../lib/domain/occasions';
+  import { nextBday } from '../lib/domain/occasions';
   import type { Member, MemberId } from '../lib/domain/types';
   import { i18n, shortDate } from '../lib/i18n/index.svelte';
   import { registerLabel } from '../lib/scene';
@@ -15,7 +15,7 @@
     }
     if (me) return t.thatsYou;
     if (st.mode === 'quiet') {
-      const o = occsFor(m, app.simDay).find(x => x.kind === 'bday');
+      const o = nextBday(m, app.simDay);
       if (o) return t.birthdayOn(shortDate(o.day));
     }
     return t.wishes(openWishesOf(app.view, m.id).length);

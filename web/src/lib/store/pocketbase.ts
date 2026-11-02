@@ -1,13 +1,21 @@
 import PocketBase, { type RecordModel } from 'pocketbase';
+import { isCurrency, type Currency, type Money, type Rates } from '../domain/money';
 import { isOccId } from '../domain/occasions';
 import {
-  glassFor, isArt, PRIORITIES, tiltFor,
-  type Claim, type ClaimId, type Invite, type InviteId, type Member, type MemberId, type Priority, type Wish, type WishId,
+  glassFor, isArt, isChristmas, isLocale, PRIORITIES, tiltFor,
+  type Christmas, type Claim, type ClaimId, type Invite, type InviteId, type Member, type MemberId, type Priority, type Wish, type WishId,
 } from '../domain/types';
-import { PRIORITY_DEFAULT, type RemoteEvent, type Store } from './store';
+import { PRIORITY_DEFAULT, type RemoteEvent, type Store, type WishPatch } from './store';
+
+const FAMILY = 'family000000000';
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '');
 const int = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.trunc(v) : 0);
+const money = (amount: unknown, currency: unknown): Money | null =>
+  typeof amount === 'number' && amount > 0 && isCurrency(currency) ? { amount, currency } : null;
+const christmasOf = (r: RecordModel): Christmas => (isChristmas(r.christmas) ? r.christmas : 'eve');
+/** The server stores a price and its currency together, or neither. */
+const priceFields = (m: Money | null) => ({ price: m?.amount ?? 0, currency: m?.currency ?? '' });
 const pbDate = (v: unknown) => { const s = str(v); if (!s) return null; const d = new Date(s.replace(' ', 'T')); return Number.isNaN(+d) ? null : d; };
 
 class HttpError extends Error {
@@ -30,6 +38,7 @@ export function pocketbaseStore(): Store {
     const d = int(r.bday_day), m = int(r.bday_month);
     return {
       id: r.id as MemberId, name, voc: str(r.voc), ins: str(r.ins), gen: str(r.gen),
+      lang: isLocale(r.lang) ? r.lang : null, currency: str(r.currency) as Currency,
       bday: d >= 1 && d <= 31 && m >= 1 && m <= 12 ? { day: d, month: m } : null,
       slot, role: r.role === 'admin' ? 'admin' : 'member', glass: glassFor(slot), tilt: tiltFor(slot),
       avatar: str(r.avatar), photo: photoUrl(r),
@@ -40,7 +49,7 @@ export function pocketbaseStore(): Store {
     const art = str(r.art);
     return {
       id: r.id as WishId, owner: str(r.owner) as MemberId, title: str(r.title), url: str(r.url), store: str(r.store),
-      price: int(r.price) || null, note: str(r.note), pr, art: isArt(art) ? art : 'gift', imageUrl: str(r.image_url),
+      price: money(r.price, r.currency), note: str(r.note), pr, art: isArt(art) ? art : 'gift', imageUrl: str(r.image_url),
       img: r.image ? pb.files.getURL(r, str(r.image), { thumb: '160x160', token: fileToken }) : '',
       gone: r.gone === 'deleted' || r.gone === 'got' ? r.gone : null,
     };
@@ -92,7 +101,10 @@ export function pocketbaseStore(): Store {
     async joinFamily(d, photo) {
       const res = await api<{ token: string; record: RecordModel }>('/api/bauble/join', {
         method: 'POST',
-        body: { token: d.token, name: d.name, voc: d.voc, ins: d.ins, gen: d.gen, email: d.email, password: d.password, bday_day: d.bday.day, bday_month: d.bday.month },
+        body: {
+          token: d.token, name: d.name, voc: d.voc, ins: d.ins, gen: d.gen, email: d.email, password: d.password,
+          bday_day: d.bday.day, bday_month: d.bday.month, lang: d.lang, currency: d.currency,
+        },
       });
       pb.authStore.save(res.token, res.record);
       let photoFailed = false;
@@ -105,12 +117,21 @@ export function pocketbaseStore(): Store {
     },
     async loadAll() {
       await refreshToken();
-      const [users, wishes, claims] = await Promise.all([
+      const [family, users, wishes, claims] = await Promise.all([
+        pb.collection('family').getOne(FAMILY),
         pb.collection('users').getFullList({ sort: 'slot,created' }),
         pb.collection('wishes').getFullList({ sort: 'created' }),
         pb.collection('claims').getFullList(),
       ]);
-      return { members: users.map(member), wishes: wishes.map(wish), claims: claims.flatMap(r => claim(r) ?? []) };
+      return { christmas: christmasOf(family), members: users.map(member), wishes: wishes.map(wish), claims: claims.flatMap(r => claim(r) ?? []) };
+    },
+    christmas: async () => christmasOf(await pb.collection('family').getOne(FAMILY)),
+    setChristmas: async christmas => { await api('/api/bauble/family', { method: 'POST', body: { christmas } }); },
+    async rates() {
+      const r = await api<{ rates?: unknown }>('/api/bauble/rates');
+      const out: Partial<Record<Currency, number>> = {};
+      for (const [c, v] of Object.entries(r.rates ?? {})) if (isCurrency(c) && typeof v === 'number' && v > 0) out[c] = v;
+      return out as Rates;
     },
     async updateProfile(me, p) {
       const fd = new FormData();
@@ -121,6 +142,7 @@ export function pocketbaseStore(): Store {
       await refreshToken();
       return member(r);
     },
+    savePrefs: async (me, p) => member(await pb.collection('users').update(me, p)),
 
     claim: async (wishId, occ, id) => claimOrThrow(await api('/api/bauble/claims', { method: 'POST', body: { wish: wishId, occ, id } })),
     joinClaim: async id => claimOrThrow(await api(`/api/bauble/claims/${id}/join`, { method: 'POST' })),
@@ -132,9 +154,10 @@ export function pocketbaseStore(): Store {
     reveal: async () => { await api('/api/bauble/reveal', { method: 'POST' }); },
 
     addWish: async (owner, d) => wish(await pb.collection('wishes').create({
-      owner, title: d.title, url: d.url, store: d.store, price: d.price ?? 0, note: d.note, pr: d.pr, art: d.art, image_url: d.imageUrl,
+      owner, title: d.title, url: d.url, store: d.store, ...priceFields(d.price), note: d.note, pr: d.pr, art: d.art, image_url: d.imageUrl,
     })),
-    updateWish: async (id, p) => wish(await pb.collection('wishes').update(id, { ...p, ...(p.price !== undefined ? { price: p.price ?? 0 } : {}) })),
+    updateWish: async (id, { price, ...rest }: WishPatch) =>
+      wish(await pb.collection('wishes').update(id, { ...rest, ...(price !== undefined && priceFields(price)) })),
     async commitOwnerOp(id, op) {
       // keepalive lets the request finish while the page unloads
       const res = await fetch(`/api/collections/wishes/records/${encodeURIComponent(id)}`, {
@@ -146,9 +169,10 @@ export function pocketbaseStore(): Store {
       if (!res.ok) throw new HttpError(res.status, await res.json().catch(() => null));
     },
     async preview(url) {
-      const r = await api<{ ok?: boolean; title?: unknown; image?: unknown; price?: unknown }>('/api/bauble/preview', { query: { url } }).catch(() => null);
+      const r = await api<{ ok?: boolean; title?: unknown; image?: unknown; price?: unknown; currency?: unknown }>('/api/bauble/preview', { query: { url } }).catch(() => null);
       if (!r?.ok) return null;
-      return { title: str(r.title), image: str(r.image), price: int(r.price) || null };
+      const amount = typeof r.price === 'number' && r.price > 0 ? r.price : null;
+      return { title: str(r.title), image: str(r.image), price: amount ? { amount, currency: isCurrency(r.currency) ? r.currency : null } : null };
     },
 
     listInvites: async () => (await pb.collection('invites').getFullList({ sort: '-created' })).map(invite),
@@ -171,6 +195,7 @@ export function pocketbaseStore(): Store {
         const c = claim(e.record);
         if (c) onEvent({ coll: 'claims', action: 'upsert', claim: c });
       }).catch(() => {});
+      pb.collection('family').subscribe(FAMILY, e => onEvent({ coll: 'family', christmas: christmasOf(e.record) })).catch(() => {});
       let connects = 0;
       pb.realtime.subscribe('PB_CONNECT', () => { if (connects++ > 0) onReconnect(); }).catch(() => {});
     },

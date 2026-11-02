@@ -23,6 +23,9 @@ export function genitive(name: string): string {
   return name + 'a';
 }
 
+/** The forms others read: "Ahoj, Karle", "s Karlem", "od Karla". A typed greeting wins over the guess. */
+export const nameForms = (name: string, voc = '') => ({ voc: voc || vocative(name), ins: instrumental(name), gen: genitive(name) });
+
 export const joinCs = (a: string[]) => (a.length <= 1 ? a[0] ?? '' : a.slice(0, -1).join(', ') + ' a ' + a[a.length - 1]);
 
 /** "s" becomes "se" before words starting with s/z/š/ž. */

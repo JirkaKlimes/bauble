@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { app } from '../lib/app.svelte';
   import { hostOf, safeHref } from '../lib/domain/links';
   import type { Wish } from '../lib/domain/types';
-  import { i18n, price } from '../lib/i18n/index.svelte';
+  import { i18n, priceText } from '../lib/i18n/index.svelte';
   import Icon from './Icon.svelte';
 
   let { w, stamp }: { w: Wish; stamp: boolean } = $props();
@@ -9,6 +10,7 @@
   const t = $derived(i18n.t);
   const href = $derived(safeHref(w.url));
   const showImg = $derived(!!w.img && !imgFailed);
+  const price = $derived(w.price && priceText(w.price, app.currency, app.rates));
 </script>
 
 <div class="tag-body">
@@ -27,7 +29,9 @@
       {:else}
         <span class="tag-store">{t.tag.noLink}</span>
       {/if}
-      {#if w.price}<span class="tag-price">{price(w.price)}</span>{/if}
+      {#if price}
+        <span class="tag-price">{price.text}{#if price.original}<span class="tag-orig">{price.original}</span>{/if}</span>
+      {/if}
     </p>
   </div>
   {#if stamp && w.pr !== 'nice'}

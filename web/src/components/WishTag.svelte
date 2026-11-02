@@ -18,9 +18,9 @@
   let root = $state<HTMLElement>();
   const t = $derived(i18n.t);
   const claim = $derived(activeClaim(app.view, w.id));
-  const occ = $derived(claim ? occOf(claim.occ, app.family.members) : null);
+  const occ = $derived(claim ? occOf(claim.occ, app.family) : null);
   const others = $derived(claim ? claim.by.filter(x => x !== app.me) : []);
-  const canSwitch = $derived(occsFor(app.member(w.owner), app.simDay).length > 1);
+  const canSwitch = $derived(occsFor(app.member(w.owner), app.simDay, app.family.christmas).length > 1);
   const names = (ids: typeof others, form: 'name' | 'ins') =>
     ids.map(x => { const m = app.member(x); return m ? (form === 'ins' ? t.ins(m) : m.name) : ''; });
 

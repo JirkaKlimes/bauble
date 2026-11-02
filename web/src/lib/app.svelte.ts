@@ -2,18 +2,21 @@ import { gsap } from 'gsap';
 import { SvelteSet } from 'svelte/reactivity';
 import { hideChrome, measureUi, showChrome } from './chrome';
 import { activeClaim, pendingReveals, sceneClaims, wishById, type View } from './domain/claims';
-import { genitive, instrumental, vocative } from './domain/czech';
+import { nameForms } from './domain/czech';
+import { isCurrency, type Currency, type Rates } from './domain/money';
 import { addDays, allOccs, occsFor, sceneOcc, statusOn, today, type Day, type Mode } from './domain/occasions';
-import { glassFor, randomId, tiltFor, type ClaimId, type Family, type InviteInfo, type Member, type MemberId, type Wish, type WishId } from './domain/types';
+import {
+  glassFor, randomId, tiltFor, type Christmas, type ClaimId, type Family, type InviteInfo, type Locale, type Member, type MemberId, type Wish, type WishId,
+} from './domain/types';
 import { burst2D, setFxMode } from './fx2d';
-import { errorText, failureOf, i18n, shortDate } from './i18n/index.svelte';
+import { browserCurrency, errorText, failureOf, i18n, shortDate } from './i18n/index.svelte';
 import { portraits } from './portraits.svelte';
 import type { Scene } from './scene';
 import { reduced } from './scene/util';
 import { bell, jingle, pluck } from './sound';
 import { demoFamily, demoStore, DEMO_ME } from './store/demo';
 import { pocketbaseStore } from './store/pocketbase';
-import type { OwnerOp, ProfilePatch, RemoteEvent, Store, WishDraft, WishPatch } from './store/store';
+import type { JoinData, OwnerOp, Prefs, ProfilePatch, RemoteEvent, Store, WishDraft, WishPatch } from './store/store';
 
 export type Phase = 'intro' | 'auth' | 'onboarding' | 'home' | 'focus';
 export type OnboardFlow = { kind: 'join'; invite: InviteInfo } | { kind: 'edit' } | { kind: 'demo' };
@@ -30,7 +33,9 @@ class App {
   store: Store;
   scene: Scene | null = null;
 
-  family = $state<Family>({ members: [], wishes: [], claims: [] });
+  family = $state<Family>({ christmas: 'eve', members: [], wishes: [], claims: [] });
+  /** Reference rates for showing prices in the reader's currency; empty until loaded. */
+  rates = $state<Rates>({});
   me = $state<MemberId | null>(null);
   realToday = $state<Day>(today());
   simDay = $state<Day>(today());
@@ -52,11 +57,18 @@ class App {
   private toastSeq = 0;
   private toastTimer = 0;
 
-  status = $derived(statusOn(this.simDay, this.family.members));
+  status = $derived(statusOn(this.simDay, this.family));
   view: View = $derived({ family: this.family, me: this.me, day: this.simDay, hidden: this.hidden });
   previewing = $derived(this.simDay !== this.realToday);
   meMember = $derived(this.family.members.find(m => m.id === this.me));
   isAdmin = $derived(this.demo || this.meMember?.role === 'admin');
+  /** The reader's currency. Before login nobody reads prices, so the fallback never shows. */
+  currency = $derived(this.meMember?.currency ?? ('EUR' as Currency));
+  /** Currencies a price can be shown in: those with a rate, and always the reader's own. */
+  currencies = $derived.by(() => {
+    const known = Object.keys(this.rates).filter(isCurrency);
+    return known.includes(this.currency) ? known : [...known, this.currency];
+  });
   pending = $derived(pendingReveals(this.view));
 
   constructor() {
@@ -126,6 +138,8 @@ class App {
   async boot() {
     this.syncScene(true);
     hideChrome(true);
+    this.store.rates().then(r => { this.rates = r; }, () => {});
+    if (!this.demo) this.store.christmas().then(c => { this.family.christmas = c; this.syncScene(); }, () => {});
     if (this.demo) {
       this.me = DEMO_ME;
       this.family = demoFamily(i18n.locale);
@@ -179,9 +193,11 @@ class App {
   }
   finishIntro() { this.scene?.finishIntro(); }
 
+  /** Loads everything; the account's language, once chosen, wins over the device's. */
   private async loadFamily() {
-    const f = await this.store.loadAll();
-    this.family = f;
+    this.family = await this.store.loadAll();
+    const lang = this.meMember?.lang;
+    if (lang) i18n.set(lang);
   }
 
   private subscribe() {
@@ -203,6 +219,11 @@ class App {
 
   private onRemote(e: RemoteEvent) {
     const f = this.family;
+    if (e.coll === 'family') {
+      f.christmas = e.christmas;
+      this.syncScene();
+      return;
+    }
     if (e.coll === 'users') {
       if (e.action === 'delete') {
         f.members = f.members.filter(m => m.id !== e.id);
@@ -302,7 +323,7 @@ class App {
     if (!this.guardWrite() || !this.me) return;
     const v = this.view, w = this.wish(wid);
     if (!w || activeClaim(v, wid)) return;
-    const occ = occsFor(this.member(w.owner), this.simDay)[0];
+    const occ = occsFor(this.member(w.owner), this.simDay, this.family.christmas)[0];
     const c = { id: randomId() as ClaimId, wish: wid, by: [this.me], occ: occ.id, revealed: false };
     const st = this.status, inScene = sceneOcc(st)?.id === occ.id;
     this.tagAnim.set(wid, 'wrap');
@@ -370,7 +391,7 @@ class App {
     if (!this.guardWrite()) return;
     const c = activeClaim(this.view, wid), w = this.wish(wid);
     if (!c || !w) return;
-    const opts = occsFor(this.member(w.owner), this.simDay).slice(0, 2);
+    const opts = occsFor(this.member(w.owner), this.simDay, this.family.christmas).slice(0, 2);
     const nx = opts[(opts.findIndex(o => o.id === c.occ) + 1) % opts.length];
     const prevOcc = c.occ;
     this.tagAnim.set(wid, 'occ');
@@ -493,8 +514,8 @@ class App {
     this.syncScene();
   }
 
-  async join(d: Parameters<Store['joinFamily']>[0], photo: Blob | null) {
-    const r = await this.store.joinFamily(d, photo);
+  async join(d: Omit<JoinData, 'lang' | 'currency'>, photo: Blob | null) {
+    const r = await this.store.joinFamily({ ...d, lang: i18n.locale, currency: browserCurrency(this.currencies) }, photo);
     this.me = r.me;
     history.replaceState(null, '', '/');
     await this.loadFamily();
@@ -507,7 +528,10 @@ class App {
     let slot = 0;
     while (used.has(slot) && slot < 11) slot++;
     const id = ('m' + Date.now().toString(36)) as MemberId;
-    const m: Member = { id, name, voc: voc || vocative(name), ins: instrumental(name), gen: genitive(name), bday, slot, role: 'member', glass: glassFor(slot), tilt: tiltFor(slot), avatar: '', photo: null };
+    const m: Member = {
+      id, name, ...nameForms(name, voc), lang: null, currency: this.currency,
+      bday, slot, role: 'member', glass: glassFor(slot), tilt: tiltFor(slot), avatar: '', photo: null,
+    };
     this.family.members.push(m);
     this.me = id;
     return m;
@@ -532,6 +556,35 @@ class App {
     showChrome(); this.measure();
     this.showToast(i18n.t.toast.hung);
     if (joined) this.subscribe();
+  }
+
+  /** Saved on the account; before login only this device remembers it. */
+  setLocale(l: Locale) {
+    if (l === i18n.locale && l === this.meMember?.lang) return;
+    i18n.set(l);
+    void this.savePrefs({ lang: l });
+  }
+  setCurrency(c: Currency) { void this.savePrefs({ currency: c }); }
+
+  private async savePrefs(p: Partial<Prefs>) {
+    const me = this.meMember;
+    if (!me) return;
+    const prev = { lang: me.lang, currency: me.currency };
+    Object.assign(me, p);
+    try {
+      const saved = await this.store.savePrefs(me.id, p);
+      me.lang = saved.lang; me.currency = saved.currency;
+    } catch (err) { Object.assign(me, prev); this.toastError(err); }
+  }
+
+  /** Admins only, and the server refuses during the Christmas season. */
+  async setChristmas(c: Christmas) {
+    const prev = this.family.christmas;
+    if (c === prev || !this.guardWrite()) return;
+    this.family.christmas = c;
+    this.syncScene();
+    try { await this.store.setChristmas(c); }
+    catch (err) { this.family.christmas = prev; this.syncScene(); this.toastError(err); }
   }
 
   resetDemo() {
@@ -563,7 +616,7 @@ class App {
 }
 
 function allOccsAround(a: App) {
-  return allOccs(a.family.members, a.realToday, addDays(a.realToday, TM_SPAN + 30))
+  return allOccs(a.family, a.realToday, addDays(a.realToday, TM_SPAN + 30))
     .map(o => o.day - 5).filter(d => d >= a.realToday && d <= a.realToday + TM_SPAN);
 }
 

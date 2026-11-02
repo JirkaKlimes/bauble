@@ -6,7 +6,7 @@ export type View = { family: Family; me: MemberId | null; day: Day; hidden: Read
 
 export type TagState = 'owner' | 'gone' | 'free' | 'mine' | 'others';
 
-export const isFulfilled = (v: View, c: Claim) => occDay(c.occ, v.family.members) < v.day;
+export const isFulfilled = (v: View, c: Claim) => occDay(c.occ, v.family) < v.day;
 export const wishById = (v: View, id: WishId) => v.family.wishes.find(w => w.id === id);
 export const activeClaim = (v: View, wid: WishId) => v.family.claims.find(c => c.wish === wid && !isFulfilled(v, c));
 const wishDone = (v: View, wid: WishId) => v.family.claims.some(c => c.wish === wid && isFulfilled(v, c));
@@ -34,7 +34,7 @@ export function tagState(v: View, w: Wish): TagState {
 export const fulfilledFor = (v: View, owner: MemberId) =>
   v.family.claims
     .filter(c => isFulfilled(v, c) && wishById(v, c.wish)?.owner === owner)
-    .sort((a, b) => occDay(b.occ, v.family.members) - occDay(a.occ, v.family.members));
+    .sort((a, b) => occDay(b.occ, v.family) - occDay(a.occ, v.family));
 
 export const pendingReveals = (v: View) => (v.me ? fulfilledFor(v, v.me).filter(c => !c.revealed) : []);
 

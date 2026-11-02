@@ -3,9 +3,11 @@
   import { tick } from 'svelte';
   import { app } from '../lib/app.svelte';
   import { guessArt, guessFromUrl, hostOf } from '../lib/domain/links';
+  import { parseAmount, type Currency, type Money } from '../lib/domain/money';
   import { PRIORITIES, type Art, type Priority } from '../lib/domain/types';
-  import { i18n } from '../lib/i18n/index.svelte';
+  import { amountText, i18n } from '../lib/i18n/index.svelte';
   import { isMobile, reduced } from '../lib/scene/util';
+  import CurrencySelect from './CurrencySelect.svelte';
   import Icon from './Icon.svelte';
 
   let { onfocusfield }: { onfocusfield: () => void } = $props();
@@ -17,7 +19,8 @@
   let source = $state<{ url: string; host: string; imageUrl: string }>({ url: '', host: '', imageUrl: '' });
   let title = $state('');
   let titleErr = $state(false);
-  let priceText = $state('');
+  let amount = $state('');
+  let currency = $state<Currency>(app.currency);
   let note = $state('');
   let pr = $state<Priority>('high');
   let baseArt = $state<Art>('gift');
@@ -39,9 +42,9 @@
     section?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
   });
 
-  async function openFields(v: { title: string; price: number | null; note?: string; pr?: Priority; art: Art }) {
+  async function openFields(v: { title: string; price: Money | null; note?: string; pr?: Priority; art: Art }) {
     step = 'fields';
-    title = v.title; priceText = v.price ? String(v.price) : ''; note = v.note ?? ''; pr = v.pr ?? 'high'; baseArt = v.art;
+    title = v.title; amount = v.price ? amountText(v.price) : ''; currency = v.price?.currency ?? app.currency; note = v.note ?? ''; pr = v.pr ?? 'high'; baseArt = v.art;
     titleErr = false;
     if (isMobile()) onfocusfield();
     await tick();
@@ -62,7 +65,9 @@
     if (my !== seq || step !== 'loading') return;
     const ttl = pv?.title || info.title;
     source.imageUrl = pv?.image ?? '';
-    void openFields({ title: ttl, price: pv?.price ?? null, art: guessArt(ttl + ' ' + info.host) });
+    // a page without a currency is most likely a shop in the reader's own country
+    const price = pv?.price ? { amount: pv.price.amount, currency: pv.price.currency ?? app.currency } : null;
+    void openFields({ title: ttl, price, art: guessArt(ttl + ' ' + info.host) });
   }
 
   function reset() {
@@ -74,7 +79,8 @@
     e.preventDefault();
     const tt = title.trim();
     if (!tt) { titleErr = true; titleEl?.focus(); return; }
-    const price = parseInt(priceText.replace(/\D/g, ''), 10) || null;
+    const a = parseAmount(amount, currency);
+    const price = a ? { amount: a, currency } : null;
     const n = note.trim();
     const w = editingWish;
     if (w) {
@@ -116,7 +122,10 @@
         </div>
         <div>
           <label for="cPrice">{t.price}</label>
-          <div class="c-price"><input class="field" id="cPrice" type="text" inputmode="numeric" placeholder={t.priceUnknown} autocomplete="off" bind:value={priceText} onfocus={onfocusfield} /><span>{t.currency}</span></div>
+          <div class="c-price">
+            <input class="field" id="cPrice" type="text" inputmode="decimal" placeholder={t.priceUnknown} autocomplete="off" bind:value={amount} onfocus={onfocusfield} />
+            <CurrencySelect short id="cCurrency" value={currency} options={app.currencies} onchange={c => (currency = c)} />
+          </div>
         </div>
         <div>
           <label for="cNote">{t.note}</label>

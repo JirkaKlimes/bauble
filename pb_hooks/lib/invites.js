@@ -1,6 +1,6 @@
 /// <reference path="../../.dev/pb_data/types.d.ts" />
 
-const { Fail, handle, findOrNull, body, clean, nowUnix, pbDate, baseURL } = require(`${__hooks}/lib/core.js`);
+const { Fail, handle, findOrNull, body, clean, nowUnix, pbDate, baseURL, isCurrency } = require(`${__hooks}/lib/core.js`);
 
 const SLOTS = 12; // tree spots; keep in sync with the web client
 const VALID_DAYS = 30;
@@ -35,6 +35,15 @@ function freeSlot(tx) {
   return tx.countRecords("users");
 }
 
+// Families mostly live in one country, so the inviter's currency is the best
+// guess. A command-line invite has no inviter: then the browser's guess.
+function currencyFor(tx, inv, guess) {
+  const by = inv.getString("created_by");
+  const inviter = by ? findOrNull(() => tx.findRecordById("users", by)) : null;
+  if (inviter) return inviter.getString("currency");
+  return isCurrency(guess) ? guess : "EUR";
+}
+
 function join(e) {
   const b = body(e);
   const name = clean(b.name, 40), email = clean(b.email, 200).toLowerCase(), password = String(b.password || "");
@@ -60,6 +69,8 @@ function join(e) {
     user.setPassword(password);
     user.set("role", inv.getString("role") || "member");
     user.set("slot", freeSlot(tx));
+    user.set("lang", b.lang === "cs" || b.lang === "en" ? b.lang : "");
+    user.set("currency", currencyFor(tx, inv, b.currency));
     if (hasBday) { user.set("bday_day", day); user.set("bday_month", month); }
     tx.save(user);
     inv.set("used_by", user.id);

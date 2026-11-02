@@ -3,7 +3,7 @@
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import { app, type OnboardFlow } from '../lib/app.svelte';
   import { hideModal, showModal } from '../lib/chrome';
-  import { genitive, instrumental, vocative } from '../lib/domain/czech';
+  import { nameForms, vocative } from '../lib/domain/czech';
   import { burstAt } from '../lib/fx2d';
   import { errorText, failureOf, i18n, monthNames } from '../lib/i18n/index.svelte';
   import type { MemberId } from '../lib/domain/types';
@@ -21,13 +21,13 @@
   const steps: Step[] = flow.kind === 'join' ? [1, 2, 3, 4] : [1, 2, 3];
   const me = flow.kind === 'edit' ? app.meMember : undefined;
   const bdayLocked = !!me?.bday;
-  const cs = () => i18n.locale === 'cs';
 
   let step = $state<Step>(1);
   const name0 = me?.name ?? (flow.kind === 'join' ? flow.invite.note : '');
   let name = $state(name0);
-  let voc = $state(me ? me.voc : cs() && name0 ? vocative(name0) : '');
-  let vocTouched = !!me;
+  // The greeting follows the name until someone types their own; only Czech shows the field.
+  let voc = $state(me ? me.voc : vocative(name0));
+  let vocTouched = !!me && me.voc !== vocative(me.name);
   let nameErr = $state(false);
   let shot = $state<HTMLCanvasElement | null>(null);
   let shotUrl = $state('');
@@ -138,19 +138,18 @@
   function next1() {
     const v = name.trim();
     if (!v) { nameErr = true; nameEl?.focus(); return; }
-    if (cs() && !voc.trim()) voc = vocative(v);
     void goStep(2);
   }
   function next2() { if (!shot) { shotErr = true; return; } void goStep(3); }
 
-  // Czech forms are stored for every member; viewers in other languages simply do not use them.
-  const forms = (n: string) => ({ voc: (cs() && voc.trim()) || vocative(n), ins: instrumental(n), gen: genitive(n) });
+  // Czech forms are stored for every member; readers in other languages do not use them.
+  const forms = (n: string) => nameForms(n, voc.trim());
 
   async function finish() {
     if (flow.kind === 'join') return goStep(4);
     if (flow.kind === 'edit') return saveProfile();
     const n = name.trim() || t.newMember;
-    const m = app.addDemoMember(n, forms(n).voc, { day, month });
+    const m = app.addDemoMember(n, voc.trim(), { day, month });
     hang(m.id, false);
   }
 
@@ -160,7 +159,7 @@
     busy = true;
     const n = name.trim() || m.name;
     try {
-      const f = cs() || n !== m.name ? forms(n) : { voc: m.voc, ins: m.ins, gen: m.gen };
+      const f = forms(n);
       const photo = shotChanged && shot ? await canvasBlob(shot) : null;
       await app.saveProfile({ name: n, ...f, bday: bdayLocked ? null : { day, month }, photo }, shotChanged && shot ? photoPortrait(shot, m.glass) : null);
     } catch (err) { app.toastError(err); }
@@ -241,14 +240,14 @@
           <label for="obName">{t.nameLabel}</label>
           <input class="field" id="obName" type="text" autocomplete="given-name" placeholder={t.namePlaceholder} maxlength="40" bind:value={name} bind:this={nameEl}
             aria-invalid={nameErr ? 'true' : undefined}
-            oninput={() => { nameErr = false; if (!vocTouched && cs()) voc = vocative(name.trim()); }}
+            oninput={() => { nameErr = false; if (!vocTouched) voc = vocative(name.trim()); }}
             onkeydown={e => { if (e.key === 'Enter') next1(); }} />
           {#if nameErr}<p class="c-err" id="obNameErr">{t.nameErr}</p>{/if}
         </div>
-        {#if i18n.locale === 'cs'}
+        {#if t.voc}
           <div class="ob-field">
-            <label for="obVoc">{t.vocLabel}</label>
-            <div class="voc-field"><span aria-hidden="true">{t.vocPrefix}</span><input class="field" id="obVoc" type="text" autocomplete="off" placeholder={t.vocPlaceholder} maxlength="40" bind:value={voc}
+            <label for="obVoc">{t.voc.label}</label>
+            <div class="voc-field"><span aria-hidden="true">{t.voc.prefix}</span><input class="field" id="obVoc" type="text" autocomplete="off" placeholder={t.voc.placeholder} maxlength="40" bind:value={voc}
               oninput={() => (vocTouched = true)} onkeydown={e => { if (e.key === 'Enter') next1(); }} /></div>
           </div>
         {/if}

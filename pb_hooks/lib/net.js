@@ -1,6 +1,6 @@
 /// <reference path="../../.dev/pb_data/types.d.ts" />
 
-const { Fail, handle } = require(`${__hooks}/lib/core.js`);
+const { Fail, handle, isCurrency } = require(`${__hooks}/lib/core.js`);
 
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
@@ -91,31 +91,6 @@ function parseAmount(raw) {
   return isFinite(n) && n > 0 ? n : null;
 }
 
-const CNB_RATES = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt";
-
-// CZK for one unit of `code`, from the Czech National Bank daily fixing.
-function czkRate(code) {
-  if (!code || code === "CZK") return 1;
-  let res;
-  try { res = fetchURL(CNB_RATES, "text/plain", 5); } catch (_) { return null; }
-  if (res.statusCode !== 200) return null;
-  for (const line of toString(res.body, 100000).split("\n")) {
-    const f = line.split("|");
-    if (f.length === 5 && f[3] === code) {
-      const rate = Number(f[4].replace(",", ".")), qty = Number(f[2]);
-      return rate > 0 && qty > 0 ? rate / qty : null;
-    }
-  }
-  return null;
-}
-
-function priceCZK(raw, currency) {
-  const amount = parseAmount(raw);
-  if (!amount) return null;
-  const rate = czkRate(String(currency || "").trim().toUpperCase());
-  return rate ? Math.round(amount * rate) : null;
-}
-
 function absolute(u, base) {
   if (!u) return "";
   if (/^https?:\/\//i.test(u)) return u;
@@ -139,15 +114,16 @@ function preview(e) {
   if (!title) { const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i); title = t ? decodeEntities(t[1]) : ""; }
   title = title.replace(/\s*[|–—-]\s*[^|–—-]{2,40}$/, "").slice(0, 120);
   const image = absolute(meta(html, ["og:image:secure_url", "og:image", "twitter:image"]), url);
-  let price = meta(html, ["product:price:amount", "og:price:amount", "price"]);
-  let currency = meta(html, ["product:price:currency", "og:price:currency", "priceCurrency"]);
-  if (!price) { const j = jsonLdPrice(html); if (j) { price = String(j.price); currency = currency || j.currency; } }
+  const ld = jsonLdPrice(html);
+  const amount = parseAmount(meta(html, ["product:price:amount", "og:price:amount", "price"]) || (ld && ld.price));
+  const currency = String(meta(html, ["product:price:currency", "og:price:currency", "priceCurrency"]) || (ld && ld.currency) || "").trim().toUpperCase();
   return e.json(200, {
     ok: !!title,
     title,
     image: allowedURL(image) ? image : "",
-    price: priceCZK(price, currency),
-    store: url.match(/^https?:\/\/(?:www\.)?([^/?#:]+)/i)[1].toLowerCase(),
+    // the shop's own currency, or "" when the page does not say
+    price: amount ? Math.round(amount * 100) / 100 : null,
+    currency: amount && isCurrency(currency) ? currency : "",
   });
 }
 

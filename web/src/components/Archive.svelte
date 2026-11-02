@@ -15,7 +15,7 @@
     <ul>
       {#each done as c (c.id)}
         {@const w = app.family.wishes.find(x => x.id === c.wish)}
-        {@const o = occOf(c.occ, app.family.members)}
+        {@const o = occOf(c.occ, app.family)}
         {#if w && o}
           <li>
             <span class="chk"><Icon name="check" /></span>

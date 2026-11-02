@@ -3,7 +3,7 @@
   import { tick } from 'svelte';
   import { app } from '../lib/app.svelte';
   import { listFor, openWishesOf, sceneClaims, tagState } from '../lib/domain/claims';
-  import { occsFor } from '../lib/domain/occasions';
+  import { nextBday } from '../lib/domain/occasions';
   import type { MemberId } from '../lib/domain/types';
   import { i18n, longDate } from '../lib/i18n/index.svelte';
   import { SHEET_MED } from '../lib/scene/camera';
@@ -12,7 +12,7 @@
   import Avatar from './Avatar.svelte';
   import Composer from './Composer.svelte';
   import Icon from './Icon.svelte';
-  import LangSwitch from './LangSwitch.svelte';
+  import Prefs from './Prefs.svelte';
   import Reveal from './Reveal.svelte';
   import WishTag from './WishTag.svelte';
 
@@ -157,7 +157,7 @@
   const list = $derived(shownId ? listFor(app.view, shownId) : []);
   const st = $derived(app.status);
   const cel = $derived(st.mode === 'bday' && st.occ.who === shownId);
-  const nb = $derived(m ? occsFor(m, app.simDay).find(o => o.kind === 'bday') : undefined);
+  const nb = $derived(m ? nextBday(m, app.simDay) : null);
   const giftCount = $derived(sceneClaims(app.view, st).length);
   const count = $derived(shownId ? openWishesOf(app.view, shownId).length : 0);
   const t = $derived(i18n.t);
@@ -238,7 +238,7 @@
           {#if app.isAdmin}
             <button class="pill-btn" type="button" data-pa="invite" onclick={() => (app.modal = { kind: 'invites' })}><Icon name="user-plus" />{t.panel.invite}</button>
           {/if}
-          <LangSwitch />
+          <Prefs />
         </div>
       {/if}
     </header>
@@ -247,7 +247,7 @@
         <Reveal />
         <Composer onfocusfield={() => { if (isMobile() && detent !== 'large') setDetent('large'); }} />
         <h3 class="sec-title">{t.panel.onList}</h3>
-        <p class="ph-secret"><Icon name="sparkle" /><span>{st.mode === 'xmas' && st.phase !== 'after' ? t.panel.secretXmas : t.panel.secretParty}</span></p>
+        <p class="ph-secret"><Icon name="sparkle" /><span>{st.mode === 'xmas' && st.phase !== 'after' ? t.christmas[app.family.christmas].secret : t.panel.secretParty}</span></p>
       {/if}
       <ul class="tags" id="tagList">
         {#each list as w, i (app.keyOf(w.id))}

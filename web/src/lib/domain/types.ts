@@ -1,3 +1,5 @@
+import type { Currency, Money } from './money';
+
 declare const brand: unique symbol;
 export type Brand<T, B extends string> = T & { readonly [brand]: B };
 
@@ -7,6 +9,14 @@ export type ClaimId = Brand<string, 'claim'>;
 export type InviteId = Brand<string, 'invite'>;
 
 export type Role = 'admin' | 'member';
+
+export const LOCALES = ['cs', 'en'] as const;
+export type Locale = (typeof LOCALES)[number];
+export const isLocale = (s: unknown): s is Locale => (LOCALES as readonly unknown[]).includes(s);
+
+/** When the family opens Christmas presents: the evening of 24 December, or the morning of 25 December. */
+export type Christmas = 'eve' | 'day';
+export const isChristmas = (s: unknown): s is Christmas => s === 'eve' || s === 'day';
 export type Priority = 'top' | 'high' | 'nice';
 export const PRIORITIES: readonly Priority[] = ['top', 'high', 'nice'];
 export const PRIORITY_ORDER: Record<Priority, number> = { top: 0, high: 1, nice: 2 };
@@ -34,6 +44,9 @@ export type Member = {
   voc: string;
   ins: string;
   gen: string;
+  /** null: not chosen, the device language applies */
+  lang: Locale | null;
+  currency: Currency;
   bday: Birthday | null;
   slot: number;
   role: Role;
@@ -50,7 +63,7 @@ export type Wish = {
   title: string;
   url: string;
   store: string;
-  price: number | null;
+  price: Money | null;
   note: string;
   pr: Priority;
   art: Art;
@@ -71,7 +84,7 @@ export type Claim = {
   revealed: boolean;
 };
 
-export type Family = { members: Member[]; wishes: Wish[]; claims: Claim[] };
+export type Family = { christmas: Christmas; members: Member[]; wishes: Wish[]; claims: Claim[] };
 
 export type Invite = {
   id: InviteId;
@@ -84,7 +97,8 @@ export type Invite = {
 
 export type InviteInfo = { token: string; note: string; role: Role };
 
-export type Preview = { title: string; image: string; price: number | null };
+/** A price from a shop page; the page may not say which currency. */
+export type Preview = { title: string; image: string; price: { amount: number; currency: Currency | null } | null };
 
 export const GLASS = ['#2342a6', '#a8173c', '#0d7050', '#c48d1c', '#8a3a7a', '#1f7a8c', '#b4561e', '#4b3fa6', '#6a7d1f', '#9b2d5f', '#2f6f4f', '#7a5a1f'];
 export const glassFor = (slot: number) => GLASS[slot % GLASS.length];

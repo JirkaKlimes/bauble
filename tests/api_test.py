@@ -50,7 +50,7 @@ def check(name, cond, extra: Any = "") -> None:
         print("  FAIL", name, extra)
 
 
-def join(token, name, email, bd, bm):
+def join(token, name, email, bd, bm, **extra):
     s, r = call(
         "POST",
         "/api/bauble/join",
@@ -61,6 +61,7 @@ def join(token, name, email, bd, bm):
             "password": "password123",
             "bday_day": bd,
             "bday_month": bm,
+            **extra,
         },
     )
     assert s == 200, (s, r)
@@ -145,8 +146,13 @@ check(
     "bad email gives email_invalid", s == 400 and r["code"] == "email_invalid", (s, r)
 )
 
-alex_t, alex = join(admin_token, "Alex", "alex@example.com", 20, 5)
+alex_t, alex = join(admin_token, "Alex", "alex@example.com", 20, 5, lang="cs", currency="CZK")
 check("join returns admin user", alex["role"] == "admin" and alex["slot"] == 0, alex)
+check(
+    "a command-line invite takes the browser's currency and language",
+    alex["currency"] == "CZK" and alex["lang"] == "cs",
+    alex,
+)
 s, r = call(
     "POST",
     "/api/bauble/join",
@@ -174,8 +180,13 @@ s, r = call(
     alex_t,
 )
 check("invite token cannot be chosen", s in (400, 403), (s, r))
-mom_t, mom = join(inv["token"], "Mom", "mom@example.com", 14, 3)
+mom_t, mom = join(inv["token"], "Mom", "mom@example.com", 14, 3, lang="xx", currency="USD")
 check("member joined with slot 1", mom["role"] == "member" and mom["slot"] == 1, mom)
+check(
+    "an invited member takes the inviter's currency, an unknown language is left empty",
+    mom["currency"] == "CZK" and mom["lang"] == "",
+    mom,
+)
 s, r = call("POST", records("invites"), {"note": "Hack", "role": "admin"}, mom_t)
 check("member cannot create invites", s in (400, 403), (s, r))
 s, r = call("GET", records("invites"), None, mom_t)
@@ -198,6 +209,11 @@ s, r = call("PATCH", records("users", f"/{alex['id']}"), {"name": "Pwned"}, mom_
 check("cannot edit someone else", s in (403, 404), (s, r))
 s, r = call("PATCH", records("users", f"/{mom['id']}"), {"voc": "mami"}, mom_t)
 check("can edit own profile", s == 200 and r["voc"] == "mami", (s, r))
+s, r = call("PATCH", records("users", f"/{mom['id']}"), {"lang": "en", "currency": "GBP"}, mom_t)
+check("can set own language and currency", s == 200 and r["lang"] == "en" and r["currency"] == "GBP", (s, r))
+for bad in [{"lang": "de"}, {"currency": "gbp"}, {"currency": ""}]:
+    s, r = call("PATCH", records("users", f"/{mom['id']}"), bad, mom_t)
+    check(f"refuses {bad}", s == 400, (s, r))
 s, r = call("GET", records("users"))
 check(
     "anonymous cannot list users",
@@ -209,10 +225,20 @@ print("wishes")
 s, w1 = call(
     "POST",
     records("wishes"),
-    {"owner": mom["id"], "title": "Mug", "pr": "high", "price": 459},
+    {"owner": mom["id"], "title": "Mug", "pr": "high", "price": 459, "currency": "CZK"},
     mom_t,
 )
 check("owner creates wish", s == 200, (s, w1))
+s, r = call(
+    "POST",
+    records("wishes"),
+    {"owner": mom["id"], "title": "Lighter", "pr": "nice", "price": 38.95, "currency": "USD"},
+    mom_t,
+)
+check("a price keeps its currency and cents", s == 200 and r["price"] == 38.95 and r["currency"] == "USD", (s, r))
+for bad in [{"price": 5}, {"currency": "USD"}, {"price": 5, "currency": "usd"}]:
+    s, r = call("POST", records("wishes"), {"owner": mom["id"], "title": "x", "pr": "nice", **bad}, mom_t)
+    check(f"wish refuses {bad}", s == 400, (s, r))
 s, r = call(
     "POST",
     records("wishes"),
@@ -248,6 +274,12 @@ s, w3 = call(
 )
 s, r = call("PATCH", records("wishes", f"/{w2['id']}"), {"owner": alex["id"]}, mom_t)
 check("cannot give a wish away", s in (400, 403, 404), (s, r))
+s, r = call("PATCH", records("wishes", f"/{w3['id']}"), {"price": 12.5, "currency": "EUR"}, mom_t)
+check("a price can be added later", s == 200 and r["currency"] == "EUR", (s, r))
+s, r = call("PATCH", records("wishes", f"/{w3['id']}"), {"price": 0}, mom_t)
+check("removing a price without its currency is refused", s == 400, (s, r))
+s, r = call("PATCH", records("wishes", f"/{w3['id']}"), {"price": 0, "currency": ""}, mom_t)
+check("a price and its currency go together", s == 200 and r["currency"] == "", (s, r))
 
 print("claims")
 occ_now, occ_later = next_occasions(mom["id"], 14, 3)
@@ -395,6 +427,34 @@ s, r = call("PATCH", records("wishes", f"/{w2['id']}"), {"gone": "got"}, mom_t)
 check("owner marks a wish as already had", s in (200, 404), (s, r))
 s, r = call("PATCH", records("wishes", f"/{w2['id']}"), {"gone": ""}, mom_t)
 check("owner cannot touch it afterwards", s == 404, (s, r))
+
+print("family")
+s, r = call("GET", records("family", "/family000000000"))
+check("anyone can read the gift day", s == 200 and r["christmas"] == "eve", (s, r))
+s, r = call("GET", records("family"))
+check("the family settings cannot be listed", s == 403, (s, r))
+s, r = call("PATCH", records("family", "/family000000000"), {"christmas": "day"}, alex_t)
+check("the gift day only changes through the API", s in (403, 404), (s, r))
+s, r = call("POST", "/api/bauble/family", {"christmas": "day"}, mom_t)
+check("a member cannot change the gift day", s == 403 and r["code"] == "admin_only", (s, r))
+s, r = call("POST", "/api/bauble/family", {"christmas": "dec25"}, alex_t)
+check("the gift day is eve or day", s == 400 and r["code"] == "christmas_invalid", (s, r))
+today = datetime.date.today()
+in_season = datetime.date(today.year, 10, 15) <= today <= datetime.date(today.year, 12, 26)
+s, r = call("POST", "/api/bauble/family", {"christmas": "day"}, alex_t)
+if in_season:
+    check("the gift day is fixed during the season", s == 400 and r["code"] == "christmas_locked", (s, r))
+else:
+    check("an admin changes the gift day", s == 200 and r["christmas"] == "day", (s, r))
+    call("POST", "/api/bauble/family", {"christmas": "eve"}, alex_t)
+
+print("rates")
+s, r = call("GET", "/api/bauble/rates")
+check(
+    "rates are public, in euros, and empty when the ECB cannot be reached",
+    s == 200 and r["base"] == "EUR" and isinstance(r["rates"], dict) and (not r["rates"] or r["rates"]["EUR"] == 1),
+    (s, r),
+)
 
 print("reveal")
 s, r = call("POST", "/api/bauble/reveal", {}, mom_t)

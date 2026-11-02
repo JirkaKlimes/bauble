@@ -1,4 +1,4 @@
-import type { BdayOccId, Member, MemberId, OccId, XmasOccId } from './types';
+import type { BdayOccId, Christmas, Family, Member, MemberId, OccId, XmasOccId } from './types';
 
 declare const dayBrand: unique symbol;
 /** Days since the Unix epoch in local calendar terms. */
@@ -14,8 +14,12 @@ const ymd = (y: number, m: number, d: number) => dayOf(new Date(y, m - 1, d));
 export type XmasOcc = { kind: 'xmas'; id: XmasOccId; year: number; day: Day };
 export type BdayOcc = { kind: 'bday'; id: BdayOccId; year: number; who: MemberId; day: Day };
 export type Occasion = XmasOcc | BdayOcc;
+/** What decides the family's occasion dates. */
+export type Calendar = Pick<Family, 'christmas' | 'members'>;
 
-export const xmasOcc = (year: number): XmasOcc => ({ kind: 'xmas', id: `xmas-${year}`, year, day: ymd(year, 12, 24) });
+const CHRISTMAS_DAY: Record<Christmas, number> = { eve: 24, day: 25 };
+export const xmasOcc = (year: number, christmas: Christmas): XmasOcc =>
+  ({ kind: 'xmas', id: `xmas-${year}`, year, day: ymd(year, 12, CHRISTMAS_DAY[christmas]) });
 export function bdayOcc(m: Member, year: number): BdayOcc | null {
   if (!m.bday) return null;
   return { kind: 'bday', id: `bday-${m.id}-${year}`, year, who: m.id, day: ymd(year, m.bday.month, m.bday.day) };
@@ -25,31 +29,36 @@ const OCC_RE = /^(?:xmas-(\d{4})|bday-([a-z0-9]+)-(\d{4}))$/;
 export const isOccId = (s: string): s is OccId => OCC_RE.test(s);
 
 /** Resolves an occasion id; a birthday of an unknown member, or one without a date, never happens. */
-export function occOf(id: OccId, members: readonly Member[]): Occasion | null {
+export function occOf(id: OccId, cal: Calendar): Occasion | null {
   const m = OCC_RE.exec(id);
   if (!m) return null;
-  if (m[1]) return xmasOcc(+m[1]);
-  const who = members.find(x => x.id === m[2]);
+  if (m[1]) return xmasOcc(+m[1], cal.christmas);
+  const who = cal.members.find(x => x.id === m[2]);
   return who ? bdayOcc(who, +m[3]) : null;
 }
-export const occDay = (id: OccId, members: readonly Member[]) => occOf(id, members)?.day ?? Infinity;
+export const occDay = (id: OccId, cal: Calendar) => occOf(id, cal)?.day ?? Infinity;
 
 /** The member's next two kinds of occasion, from `from` on, nearest first. */
-export function occsFor(member: Member | undefined, from: Day): Occasion[] {
+export function occsFor(member: Member | undefined, from: Day, christmas: Christmas): Occasion[] {
   const y = dateOf(from).getFullYear(), out: Occasion[] = [];
   for (const yy of [y, y + 1]) {
-    out.push(xmasOcc(yy));
+    out.push(xmasOcc(yy, christmas));
     const b = member && bdayOcc(member, yy);
     if (b) out.push(b);
   }
   return out.filter(o => o.day >= from).sort((a, b) => a.day - b.day);
 }
 
-export function allOccs(members: readonly Member[], from: Day, to: Day): Occasion[] {
+export function nextBday(member: Member, from: Day): BdayOcc | null {
+  const y = dateOf(from).getFullYear();
+  return [bdayOcc(member, y), bdayOcc(member, y + 1)].find(o => o && o.day >= from) ?? null;
+}
+
+export function allOccs(cal: Calendar, from: Day, to: Day): Occasion[] {
   const y = dateOf(from).getFullYear(), out: Occasion[] = [];
   for (const yy of [y - 1, y, y + 1, y + 2]) {
-    out.push(xmasOcc(yy));
-    for (const m of members) { const b = bdayOcc(m, yy); if (b) out.push(b); }
+    out.push(xmasOcc(yy, cal.christmas));
+    for (const m of cal.members) { const b = bdayOcc(m, yy); if (b) out.push(b); }
   }
   return out.filter(o => o.day >= from && o.day <= to).sort((a, b) => a.day - b.day);
 }
@@ -64,27 +73,33 @@ export type Status =
 
 const phaseOf = (d: number): Phase => (d > 0 ? 'countdown' : d === 0 ? 'day' : 'after');
 
-/*
- * Christmas season runs 15 October to 26 December. A birthday takes over 21 days before
- * (7 inside the Christmas season), on the day and the day after. The nearer birthday wins.
- */
-export function statusOn(day: Day, members: readonly Member[]): Status {
+/** 15 October to 26 December. The server keeps the gift day fixed inside it. */
+export function inXmasSeason(day: Day) {
   const y = dateOf(day).getFullYear();
-  const xs = ymd(y, 10, 15), xd = ymd(y, 12, 24), xe = ymd(y, 12, 26);
-  const inX = day >= xs && day <= xe;
+  return day >= ymd(y, 10, 15) && day <= ymd(y, 12, 26);
+}
+
+/*
+ * A birthday takes over 21 days before (7 inside the Christmas season), on the day and
+ * the day after. The nearer birthday wins.
+ */
+export function statusOn(day: Day, cal: Calendar): Status {
+  const y = dateOf(day).getFullYear();
+  const xmas = xmasOcc(y, cal.christmas), xd = xmas.day;
+  const inX = inXmasSeason(day);
   const win = inX ? 7 : 21;
   const cands: { occ: BdayOcc; diff: number }[] = [];
-  for (const m of members) for (const yy of [y - 1, y, y + 1]) {
+  for (const m of cal.members) for (const yy of [y - 1, y, y + 1]) {
     const o = bdayOcc(m, yy);
     if (!o) continue;
     const diff = o.day - day;
     if (diff >= -1 && diff <= win) cands.push({ occ: o, diff });
   }
   cands.sort((a, b) => Number(a.diff < 0) - Number(b.diff < 0) || Math.abs(a.diff) - Math.abs(b.diff));
-  const upcoming = allOccs(members, day, addDays(day, 400)).map(o => ({ occ: o, diff: o.day - day }));
+  const upcoming = allOccs(cal, day, addDays(day, 400)).map(o => ({ occ: o, diff: o.day - day }));
   const c = cands[0];
   if (c) return { mode: 'bday', occ: c.occ, diff: c.diff, phase: phaseOf(c.diff), upcoming, key: c.occ.id };
-  if (inX) return { mode: 'xmas', occ: xmasOcc(y), diff: xd - day, phase: phaseOf(xd - day), upcoming, key: `xmas-${y}` };
+  if (inX) return { mode: 'xmas', occ: xmas, diff: xd - day, phase: phaseOf(xd - day), upcoming, key: xmas.id };
   return { mode: 'quiet', next: upcoming[0], diff: upcoming[0]?.diff ?? 0, upcoming, key: 'quiet' };
 }
 

@@ -20,7 +20,7 @@
   $effect(() => { const p = app.pending; if (phase === 'wrapped') snap = p; });
 
   const t = $derived(i18n.t);
-  const first = $derived(snap[0] ? occOf(snap[0].occ, app.family.members) : null);
+  const first = $derived(snap[0] ? occOf(snap[0].occ, app.family) : null);
   const givers = (c: Claim) => i18n.t.joinNames(c.by.map(x => { const m = app.member(x); return m ? i18n.t.gen(m) : ''; }));
 
   function run() {
@@ -53,7 +53,7 @@
 
 {#if snap.length && first}
   <section class="reveal" id="reveal" aria-labelledby="revealTitle" bind:this={section}>
-    <div class="reveal-head"><p>{first.kind === 'xmas' ? t.reveal.kickXmas : t.reveal.kickParty}</p><h3 id="revealTitle">{phase === 'done' ? t.reveal.done : t.reveal.title(snap.length)}</h3></div>
+    <div class="reveal-head"><p>{first.kind === 'xmas' ? t.christmas[app.family.christmas].revealKicker : t.reveal.kickParty}</p><h3 id="revealTitle">{phase === 'done' ? t.reveal.done : t.reveal.title(snap.length)}</h3></div>
     <ul class="tags">
       {#each snap as c, i (c.id)}
         {@const w = app.family.wishes.find(x => x.id === c.wish)}

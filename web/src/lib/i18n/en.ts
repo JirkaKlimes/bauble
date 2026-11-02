@@ -9,7 +9,7 @@ const join = (a: string[]) => new Intl.ListFormat('en', { type: 'conjunction' })
 export const ERROR_CODES = [
   'wish_not_found', 'claim_not_found', 'own_wish', 'wish_gone', 'occ_invalid', 'claim_taken', 'occasion_over',
   'not_buyer', 'invite_invalid', 'name_required', 'email_invalid', 'password_short', 'email_taken', 'url_blocked',
-  'query_refused',
+  'query_refused', 'christmas_locked',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -18,7 +18,8 @@ export const en = {
   appDescription: 'A family wish list that dresses up for whatever is coming next.',
   sceneLabel: 'A scene with the whole family as ornaments',
   noGl: 'This browser cannot show 3D. The wish lists still work.',
-  langLabel: 'Language',
+  // "Dec 24": a numeric date is ambiguous in English (12/24 or 24/12)
+  shortDate: { day: 'numeric', month: 'short' } as Intl.DateTimeFormatOptions,
 
   voc: (m: Member) => m.name,
   ins: (m: Member) => m.name,
@@ -33,12 +34,42 @@ export const en = {
   sound: 'Sound',
   myWishes: 'My wishes',
   timeMachine: 'Time machine',
-  countXmas: (n: number) => pair(`${p(n, { one: 'day', other: 'days' })} until`, 'Christmas Eve'),
   countBday: (n: number) => pair(`${p(n, { one: 'day', other: 'days' })} until`, 'the party'),
   countQuiet: (n: number) => pair(`${p(n, { one: 'day', other: 'days' })} until`, 'the next party'),
   countToday: 'Today',
-  countTodayXmas: pair('is Christmas', 'Eve'),
   countTodayBday: pair('is the', 'party'),
+
+  christmas: {
+    eve: {
+      count: (n: number) => pair(`${p(n, { one: 'day', other: 'days' })} until`, 'Christmas Eve'),
+      today: pair('is Christmas', 'Eve'),
+      heroCount: (n: number) => `${p(n, { one: 'day', other: 'days' })} until Christmas Eve`,
+      dayTitle: "It's Christmas Eve!",
+      daySub: 'The bell rings tonight. Last chance for presents.',
+      afterTitle: 'Santa has been!',
+      revealKicker: 'Santa has been',
+      secret: "You'll see who is buying what after Christmas Eve.",
+      dayName: 'Christmas Eve',
+    },
+    day: {
+      count: (n: number) => pair(`${p(n, { one: 'day', other: 'days' })} until`, 'Christmas'),
+      today: pair('is Christmas', 'Day'),
+      heroCount: (n: number) => `${p(n, { one: 'day', other: 'days' })} until Christmas`,
+      dayTitle: "It's Christmas Day!",
+      daySub: 'Santa came in the night. Time to open the presents.',
+      afterTitle: 'Who gave what?',
+      revealKicker: 'After Christmas',
+      secret: "You'll see who is buying what after Christmas Day.",
+      dayName: 'Christmas Day',
+    },
+  },
+
+  prefs: {
+    language: 'Language',
+    currency: 'Currency',
+    christmas: 'Christmas presents',
+    christmasLocked: 'The day of the presents can change after Christmas.',
+  },
 
   label: {
     celebratingYou: (inDays: string) => `your party is ${inDays}`,
@@ -61,11 +92,7 @@ export const en = {
   hero: {
     hello: (voc: string) => `Hi, ${voc}.`,
     pickOrnament: 'Pick an ornament to see what everyone wishes for.',
-    countXmas: (n: number) => `${p(n, { one: 'day', other: 'days' })} until Christmas Eve`,
-    xmasEve: "It's Christmas Eve!",
-    xmasEveSub: 'The bell rings tonight. Last chance for presents.',
     merryXmasVoc: (voc: string) => `Merry Christmas, ${voc}.`,
-    santaCame: 'Santa has been!',
     unwrapSub: (n: number) => `${n === 1 ? 'One wish came true.' : `${n} wishes came true.`} Unwrap to see who gave what.`,
     merryXmas: 'Merry Christmas!',
     afterXmasSub: 'The presents are unwrapped. The lists are filling up for the next parties.',
@@ -88,7 +115,7 @@ export const en = {
   },
 
   panel: {
-    tools: 'Profile and language',
+    tools: 'Profile, language and currency',
     resize: 'Make the panel bigger or smaller',
     close: 'Close',
     family: 'Family',
@@ -101,7 +128,6 @@ export const en = {
     count: (n: number) => `${n} ${p(n, { one: 'wish', other: 'wishes' })}`,
     underTree: 'under the tree',
     forParty: 'for the party',
-    secretXmas: "You'll see who is buying what after Christmas Eve.",
     secretParty: "You'll see who is getting you what after the party.",
     editProfile: 'Edit profile',
     invite: 'Invite family',
@@ -160,7 +186,6 @@ export const en = {
   },
 
   reveal: {
-    kickXmas: 'Santa has been',
     kickParty: 'After the party',
     title: (n: number) => (n === 1 ? 'One wish came true' : `${n} wishes came true`),
     mystery: "From whom? You'll see after unwrapping.",
@@ -183,7 +208,6 @@ export const en = {
     whatErr: 'Write what it is.',
     price: 'Price',
     priceUnknown: "don't know",
-    currency: 'CZK',
     note: 'A note for the others',
     notePlaceholder: 'Size, colour, anything that helps',
     howMuch: 'How much do you want it?',
@@ -204,9 +228,8 @@ export const en = {
     nameLabel: 'What does your family call you?',
     namePlaceholder: 'e.g. Sam',
     nameErr: 'Write what they call you.',
-    vocLabel: 'How we greet you',
-    vocPrefix: 'Hi,',
-    vocPlaceholder: 'Sam',
+    // the greeting form; only Czech changes a name to greet someone
+    voc: null as { label: string; prefix: string; placeholder: string } | null,
     next: 'Continue',
     logout: 'Log out',
     smile: 'Smile',
@@ -307,7 +330,6 @@ export const en = {
     reset: 'Reset demo',
     resetNote: 'nothing is saved',
     xmasIn: (inDays: string) => `Christmas ${inDays}`,
-    xmasEve: 'Christmas Eve',
     afterXmas: 'After Christmas',
     afterParty: (name: string) => `${name}, after the party`,
     celebrates: (name: string, inDays: string) => `${name} celebrates ${inDays}`,
@@ -332,6 +354,7 @@ export const en = {
     email_taken: 'An account with this email already exists.',
     url_blocked: 'This link cannot be read.',
     query_refused: 'Something went wrong. Try again.',
+    christmas_locked: 'The day of the presents can change after Christmas.',
   } satisfies Record<ErrorCode | 'generic' | 'offline', string>,
 };
 

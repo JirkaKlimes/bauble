@@ -15,7 +15,7 @@ export const cs: Dict = {
   appDescription: 'Rodinný seznam přání, který se mění podle toho, co se blíží: Vánoce, narozeniny, nebo klidné období mezi nimi.',
   sceneLabel: 'Scéna s ozdobami celé rodiny',
   noGl: 'Tenhle prohlížeč neumí 3D, seznamy přání ale fungují i tak.',
-  langLabel: 'Jazyk',
+  shortDate: { day: 'numeric', month: 'numeric' },
 
   voc: (m: Member) => m.voc || vocative(m.name),
   ins: (m: Member) => m.ins || instrumental(m.name),
@@ -30,12 +30,42 @@ export const cs: Dict = {
   sound: 'Zvuk',
   myWishes: 'Moje přání',
   timeMachine: 'Časostroj',
-  countXmas: n => pair(`${dnyWord(n)} do`, 'Štědrého dne'),
   countBday: n => pair(`${dnyWord(n)} do`, 'oslavy'),
   countQuiet: n => pair(`${dnyWord(n)} do další`, 'oslavy'),
   countToday: 'Dnes',
-  countTodayXmas: pair('je Štědrý', 'den'),
   countTodayBday: pair('se', 'slaví'),
+
+  christmas: {
+    eve: {
+      count: n => pair(`${dnyWord(n)} do`, 'Štědrého dne'),
+      today: pair('je Štědrý', 'den'),
+      heroCount: n => `${dnyWord(n)} do Štědrého dne`,
+      dayTitle: 'Je Štědrý den!',
+      daySub: 'Večer zazvoní zvoneček. Poslední chvíle na dárky.',
+      afterTitle: 'Ježíšek už byl!',
+      revealKicker: 'Ježíšek už byl',
+      secret: 'Kdo ti co kupuje, uvidíš až po Štědrém dni.',
+      dayName: 'Štědrý den',
+    },
+    day: {
+      count: n => pair(`${dnyWord(n)} do`, 'Vánoc'),
+      today: pair('je Boží', 'hod'),
+      heroCount: n => `${dnyWord(n)} do Vánoc`,
+      dayTitle: 'Je Boží hod!',
+      daySub: 'Santa v noci nadělil. Hurá rozbalovat dárky.',
+      afterTitle: 'Kdo dal co?',
+      revealKicker: 'Po Vánocích',
+      secret: 'Kdo ti co kupuje, uvidíš až po Božím hodu.',
+      dayName: 'Boží hod',
+    },
+  },
+
+  prefs: {
+    language: 'Jazyk',
+    currency: 'Měna',
+    christmas: 'Vánoční dárky',
+    christmasLocked: 'Den dárků jde změnit až po Vánocích.',
+  },
 
   label: {
     celebratingYou: d => `slavíš ${d}`,
@@ -58,11 +88,7 @@ export const cs: Dict = {
   hero: {
     hello: voc => `Ahoj, ${voc}.`,
     pickOrnament: 'Vyber ozdobu a uvidíš, co si kdo přeje.',
-    countXmas: n => `${dnyWord(n)} do Štědrého dne`,
-    xmasEve: 'Je Štědrý den!',
-    xmasEveSub: 'Večer zazvoní zvoneček. Poslední chvíle na dárky.',
     merryXmasVoc: voc => `Veselé Vánoce, ${voc}.`,
-    santaCame: 'Ježíšek už byl!',
     unwrapSub: n => `${fulfilled(n)} Rozbal si, od koho co je.`,
     merryXmas: 'Veselé Vánoce!',
     afterXmasSub: 'Dárky jsou rozbalené. Seznamy se teď plní na další oslavy.',
@@ -87,7 +113,7 @@ export const cs: Dict = {
   },
 
   panel: {
-    tools: 'Profil a jazyk',
+    tools: 'Profil, jazyk a měna',
     resize: 'Zvětšit nebo zmenšit panel',
     close: 'Zavřít',
     family: 'Rodina',
@@ -100,7 +126,6 @@ export const cs: Dict = {
     count: prani,
     underTree: 'pod stromečkem',
     forParty: 'na oslavu',
-    secretXmas: 'Kdo ti co kupuje, uvidíš až po Štědrém dni.',
     secretParty: 'Kdo ti co chystá, uvidíš až po oslavě.',
     editProfile: 'Upravit profil',
     invite: 'Pozvat do rodiny',
@@ -159,7 +184,6 @@ export const cs: Dict = {
   },
 
   reveal: {
-    kickXmas: 'Ježíšek už byl',
     kickParty: 'Po oslavě',
     title: n => fulfilled(n).replace('.', ''),
     mystery: 'Od koho? To uvidíš po rozbalení.',
@@ -182,7 +206,6 @@ export const cs: Dict = {
     whatErr: 'Napiš, co to je.',
     price: 'Cena',
     priceUnknown: 'nevím',
-    currency: 'Kč',
     note: 'Poznámka pro ostatní',
     notePlaceholder: 'Velikost, barva, cokoliv co pomůže',
     howMuch: 'Jak moc to chceš?',
@@ -203,9 +226,7 @@ export const cs: Dict = {
     nameLabel: 'Jak ti doma říkají?',
     namePlaceholder: 'třeba Karel',
     nameErr: 'Napiš, jak ti říkají.',
-    vocLabel: 'Jak tě pozdravíme',
-    vocPrefix: 'Ahoj,',
-    vocPlaceholder: 'Karle',
+    voc: { label: 'Jak tě pozdravíme', prefix: 'Ahoj,', placeholder: 'Karle' },
     next: 'Pokračovat',
     logout: 'Odhlásit se',
     smile: 'Usměj se',
@@ -306,7 +327,6 @@ export const cs: Dict = {
     reset: 'Obnovit ukázku',
     resetNote: 'data se neukládají',
     xmasIn: d => `Vánoce ${d}`,
-    xmasEve: 'Štědrý den',
     afterXmas: 'Po Vánocích',
     afterParty: name => `${name}, po oslavě`,
     celebrates: (name, d) => `${name} slaví ${d}`,
@@ -331,5 +351,6 @@ export const cs: Dict = {
     email_taken: 'Účet s tímhle e-mailem už existuje.',
     url_blocked: 'Tenhle odkaz nejde přečíst.',
     query_refused: 'Něco se nepovedlo. Zkus to znovu.',
+    christmas_locked: 'Den dárků jde změnit až po Vánocích.',
   },
 };

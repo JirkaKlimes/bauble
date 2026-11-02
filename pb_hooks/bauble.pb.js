@@ -8,6 +8,10 @@ routerAdd("POST", "/api/bauble/claims/{id}/leave", (e) => require(`${__hooks}/li
 routerAdd("POST", "/api/bauble/claims/{id}/occ", (e) => require(`${__hooks}/lib/claims.js`).move(e), $apis.requireAuth("users"));
 routerAdd("POST", "/api/bauble/reveal", (e) => require(`${__hooks}/lib/claims.js`).reveal(e), $apis.requireAuth("users"));
 routerAdd("GET", "/api/bauble/preview", (e) => require(`${__hooks}/lib/net.js`).preview(e), $apis.requireAuth("users"));
+routerAdd("POST", "/api/bauble/family", (e) => require(`${__hooks}/lib/family.js`).setChristmas(e), $apis.requireAuth("users"));
+
+// public: reference rates, cached on the server; sign-up uses them to guess a currency
+routerAdd("GET", "/api/bauble/rates", (e) => require(`${__hooks}/lib/rates.js`).rates(e));
 
 // public: the invite token is the credential
 routerAdd("GET", "/api/bauble/invite/{token}", (e) => require(`${__hooks}/lib/invites.js`).check(e));
@@ -19,6 +23,11 @@ onRecordCreateRequest((e) => {
 }, "invites");
 
 onRecordDeleteRequest((e) => require(`${__hooks}/lib/wishes.js`).softDelete(e), "wishes");
+
+onRecordValidate((e) => {
+  require(`${__hooks}/lib/wishes.js`).checkPrice(e.record);
+  e.next();
+}, "wishes");
 
 onRecordCreateRequest((e) => {
   require(`${__hooks}/lib/wishes.js`).attachImage(e.record, "");

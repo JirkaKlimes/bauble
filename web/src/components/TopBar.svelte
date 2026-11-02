@@ -8,10 +8,10 @@
   let sound = $state(soundOn());
 
   const count = $derived.by((): { num: string | number; lines: [string, string] } | null => {
-    const st = app.status, t = i18n.t;
+    const st = app.status, t = i18n.t, x = t.christmas[app.family.christmas];
     if (st.mode === 'quiet') return { num: st.diff, lines: t.countQuiet(st.diff) };
-    if (st.phase === 'countdown') return { num: st.diff, lines: st.mode === 'xmas' ? t.countXmas(st.diff) : t.countBday(st.diff) };
-    if (st.phase === 'day') return { num: t.countToday, lines: st.mode === 'xmas' ? t.countTodayXmas : t.countTodayBday };
+    if (st.phase === 'countdown') return { num: st.diff, lines: st.mode === 'xmas' ? x.count(st.diff) : t.countBday(st.diff) };
+    if (st.phase === 'day') return { num: t.countToday, lines: st.mode === 'xmas' ? x.today : t.countTodayBday };
     return null;
   });
 </script>

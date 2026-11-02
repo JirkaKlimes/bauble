@@ -11,8 +11,8 @@ birthday they float over a cake as balloons, and in between they drift under the
 is a gift tag. Anyone can say "I'll buy it", and the person who made the wish never finds out who
 is buying what until the morning after the occasion.
 
-Czech and English. One PocketBase binary serves everything: the site, the API, realtime updates
-and the admin dashboard.
+Czech and English. Each person picks their language and the currency they read prices in. One
+PocketBase binary serves everything: the site, the API, realtime updates and the admin dashboard.
 
 <p align="center">
   <img src="docs/phone-birthday.webp" width="31%"
@@ -113,10 +113,12 @@ no egress filter.
        alt="Mum's list seen by another family member: tags show that Dad buys the massage voucher, the mug is still free, and Sis buys the socks for Mum's birthday">
 </p>
 
-**Occasions.** The Christmas season runs from 15 October to 26 December, and gifts are for
-Christmas Eve. A birthday takes over 21 days before, on the day and the day after. Inside the
-Christmas season it takes over only 7 days before. Of two birthdays close together, the nearer
-wins. Otherwise the quiet scene shows what comes next.
+**Occasions.** The Christmas season runs from 15 October to 26 December. Gifts are for the evening
+of 24 December or the morning of 25 December: admins choose in their profile tools. The day can
+only change outside the season, and claims that are not revealed yet move with it. A birthday takes
+over 21 days before, on the day and the day after. Inside the Christmas season it takes over only
+7 days before. Of two birthdays close together, the nearer wins. Otherwise the quiet scene shows
+what comes next.
 
 **Claims.** "I'll buy it" ties the claim to the recipient's next occasion. The buyer can move it to
 the other one (Christmas or birthday). Others can join a claim. The server hides claims on your own
@@ -132,6 +134,12 @@ ten minutes. Undo happens in the browser: the request goes out when the undo toa
 **Link previews.** Pasting a shop link makes the server read the page title, price and image
 (Open Graph, JSON-LD). Shops with bot protection fail. Then the title comes from the URL and can be
 edited. Product images are downloaded once and served from PocketBase.
+
+**Prices and languages.** A wish keeps its price in the currency of the shop, or of the person who
+typed it. Everyone sees prices in their own currency, marked as approximate, with the original
+beside it. The rates are the European Central Bank reference rates (about 30 currencies), fetched by
+the server and cached for six hours. Language and currency are saved on the account, so they follow
+a person to every device. Before login, the browser language decides.
 
 **Admins** also get the time machine to preview any date. Nothing can be changed while previewing.
 
@@ -155,6 +163,8 @@ edited. Product images are downloaded once and served from PocketBase.
 - A preview response is read whole before it is truncated, so a member can make the service hit
   `MemoryMax` and restart. PocketBase has no limit on that read.
 - `previewBlocklist` (`BAUBLE_PREVIEW_BLOCK`) blocks public names of internal services.
+- The server fetches exchange rates from `www.ecb.europa.eu`. `/api/bauble/rates` and the gift day
+  (`family` collection) are readable without login. Neither holds anything private.
 - The superuser API answers on loopback only. Use `bauble-ctl` or an SSH tunnel.
 - Rate limits are on. PocketBase trusts the `CF-Connecting-IP` header for client IPs. Without
   Cloudflare in front, clear it in the dashboard (Settings, Trusted proxy).
@@ -183,3 +193,5 @@ python3 scripts/screenshots.py       # retake docs/*.webp from the demo, renders
 - Czech name forms (vocative, genitive, instrumental) are guessed by rule. The greeting form can be
   edited at sign-up and in the profile.
 - The 3D scene needs WebGL. Without it the page shows names and lists only.
+- Converted prices use the last ECB rates and are approximate. A currency the ECB does not publish
+  is shown only as it was entered.

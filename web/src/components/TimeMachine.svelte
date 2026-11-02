@@ -15,26 +15,26 @@
   const today = $derived(app.realToday);
 
   const track = $derived.by(() => {
-    const ms = app.family.members, bands: { mode: Mode; a: number; b: number }[] = [], months: [number, string][] = [];
+    const cal = app.family, bands: { mode: Mode; a: number; b: number }[] = [], months: [number, string][] = [];
     let run: { mode: Mode; a: number; b: number } | null = null;
     for (let i = 0; i <= TM_SPAN; i++) {
-      const mode = statusOn(addDays(today, i), ms).mode;
+      const mode = statusOn(addDays(today, i), cal).mode;
       if (!run || run.mode !== mode) { if (run) bands.push(run); run = { mode, a: i, b: i }; } else run.b = i;
       const d = addDays(today, i);
       if (dateOf(d).getDate() === 1) months.push([i, monthShort(d)]);
     }
     if (run) bands.push(run);
-    return { bands, months: months.filter((_, i) => i % (innerWidth < 420 ? 2 : 1) === 0), marks: allOccs(ms, today, addDays(today, TM_SPAN)) };
+    return { bands, months: months.filter((_, i) => i % (innerWidth < 420 ? 2 : 1) === 0), marks: allOccs(cal, today, addDays(today, TM_SPAN)) };
   });
   const pct = (i: number) => (i / TM_SPAN * 100).toFixed(3) + '%';
 
   let shownDay = $state<Day>(app.simDay);
   $effect(() => { shownDay = app.simDay; });
   const v = $derived(shownDay - today);
-  const st = $derived(statusOn(shownDay, app.family.members));
+  const st = $derived(statusOn(shownDay, app.family));
 
   function badge(s: Status): { icon: string; text: string } {
-    if (s.mode === 'xmas') return { icon: 'star', text: s.phase === 'countdown' ? t.xmasIn(i18n.t.inDays(s.diff)) : s.phase === 'day' ? t.xmasEve : t.afterXmas };
+    if (s.mode === 'xmas') return { icon: 'star', text: s.phase === 'countdown' ? t.xmasIn(i18n.t.inDays(s.diff)) : s.phase === 'day' ? i18n.t.christmas[app.family.christmas].dayName : t.afterXmas };
     if (s.mode === 'bday') { const n = app.member(s.occ.who)?.name ?? ''; return { icon: 'cake', text: s.phase === 'after' ? t.afterParty(n) : t.celebrates(n, i18n.t.inDays(s.diff)) }; }
     return { icon: 'moon', text: t.quiet };
   }

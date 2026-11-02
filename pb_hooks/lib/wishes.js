@@ -37,4 +37,11 @@ function attachImage(record, previous) {
   }
 }
 
-module.exports = { softDelete, purge, attachImage };
+// A price is an amount in a currency. Without a price there is no currency.
+function checkPrice(record) {
+  if ((record.getFloat("price") > 0) !== (record.getString("currency") !== "")) {
+    throw new BadRequestError("A price needs a currency, and a currency needs a price.");
+  }
+}
+
+module.exports = { softDelete, purge, attachImage, checkPrice };

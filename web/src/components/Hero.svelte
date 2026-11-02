@@ -16,15 +16,15 @@
   type Model = { kicker: string; head: string; sub: string; subDesk: boolean; count: { n: number; text: string } | null; primary: Btn; secondary: Btn | null; upcoming: boolean; long: boolean };
 
   function model(st: Status, me: MemberId): Model {
-    const t = i18n.t, h = t.hero, m = app.member(me);
+    const t = i18n.t, h = t.hero, x = t.christmas[app.family.christmas], m = app.member(me);
     const voc = m ? t.voc(m) : '', hi = h.hello(voc), pend = app.pending.length;
     const mine: Btn = { label: t.myWishes, icon: 'gift', act: { kind: 'mine' } };
     const M: Model = { kicker: '', head: hi, sub: '', subDesk: false, count: null, primary: mine, secondary: null, upcoming: false, long: false };
     const unwrap = () => { M.primary = { label: h.unwrap, icon: 'gift', act: { kind: 'reveal' } }; M.secondary = { label: t.myWishes, act: { kind: 'mine' } }; };
     if (st.mode === 'xmas') {
-      if (st.phase === 'countdown') { M.sub = h.pickOrnament; M.subDesk = true; M.count = { n: st.diff, text: h.countXmas(st.diff) }; }
-      else if (st.phase === 'day') { M.kicker = hi; M.head = h.xmasEve; M.sub = h.xmasEveSub; }
-      else if (pend) { M.kicker = h.merryXmasVoc(voc); M.head = h.santaCame; M.sub = h.unwrapSub(pend); unwrap(); }
+      if (st.phase === 'countdown') { M.sub = h.pickOrnament; M.subDesk = true; M.count = { n: st.diff, text: x.heroCount(st.diff) }; }
+      else if (st.phase === 'day') { M.kicker = hi; M.head = x.dayTitle; M.sub = x.daySub; }
+      else if (pend) { M.kicker = h.merryXmasVoc(voc); M.head = x.afterTitle; M.sub = h.unwrapSub(pend); unwrap(); }
       else { M.kicker = hi; M.head = h.merryXmas; M.sub = h.afterXmasSub; }
     } else if (st.mode === 'bday') {
       const c = app.member(st.occ.who), cname = c?.name ?? '', isMe = st.occ.who === me;
