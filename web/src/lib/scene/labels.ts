@@ -1,8 +1,7 @@
 import * as THREE from 'three';
 import type { MemberId } from '../domain/types';
 import { S } from './ctx';
-import { BAUBLE_R } from './layout';
-import { baubles, type Bauble } from './ornaments';
+import { baubles, reach, type Bauble } from './ornaments';
 import { isMobile, lerp } from './util';
 
 type Label = { el: HTMLElement; w: number; h: number; x: number | null; y: number; v: number };
@@ -33,15 +32,15 @@ function hide(l: Label) { l.el.style.opacity = '0'; l.el.style.pointerEvents = '
  */
 export function layoutLabels() {
   const { W, H, ui } = S;
-  const show = S.interaction === 'home';
+  const show = S.interaction === 'home', r = reach(S.WT.bday);
   const items: { b: Bauble; l: Label; below: ReturnType<typeof project>; above: ReturnType<typeof project>; ctr: ReturnType<typeof project>; pri: number }[] = [];
   for (const [id, l] of labels) {
     const b = baubles.get(id);
     if (!b) continue;
     if (!show || b.labelAlpha <= 0.01 || b.pop < 0.3) { hide(l); continue; }
     const s = b.sc * b.pop * b.modeS * b.dimS;
-    const below = project(tmp2.copy(b.root.position).add(up.set(0, -BAUBLE_R * s - 0.06, 0)));
-    const above = project(tmp2.copy(b.root.position).add(up.set(0, BAUBLE_R * s + (b.hat ? 0.95 : 0.12) * s, 0)));
+    const below = project(tmp2.copy(b.root.position).add(up.set(0, -r.down * s - 0.06, 0)));
+    const above = project(tmp2.copy(b.root.position).add(up.set(0, r.up * s + (b.hat ? 0.95 : 0.12) * s, 0)));
     const ctr = project(b.root.position);
     const st = S.status, cel = st?.mode === 'bday' && st.occ.who === id;
     items.push({ b, l, below, above, ctr, pri: (cel ? 100 : 0) + (id === S.me ? 10 : 0) - ctr.z });

@@ -6,14 +6,15 @@ import { homeView } from './camera';
 import { S, type SceneMember } from './ctx';
 import { BAUBLE_R, CAKE, CAP_THETA, L_SOLID, SLOTS, slotPos } from './layout';
 import { burst3D } from './particles';
-import { clamp, reduced, stripeTex, V3 } from './util';
+import { clamp, lerp, reduced, stripeTex, V3 } from './util';
 
 export type HatName = 'santa' | 'party' | 'partyGold';
 type HatRig = { g: THREE.Group; y: number; s0: THREE.Vector3; rz: number };
 
 export type Bauble = {
   id: MemberId;
-  faceMat: THREE.MeshPhysicalMaterial;
+  faceMat: THREE.MeshPhysicalMaterial; skin: THREE.MeshPhysicalMaterial;
+  shell: THREE.Mesh[]; cap: THREE.Group; knot: THREE.Mesh;
   root: THREE.Group; yaw: THREE.Group; wob: THREE.Group; hatBox: THREE.Group;
   hats: Record<HatName, HatRig>; hat: HatName | null;
   base: THREE.Vector3; fwd: THREE.Vector3; hits: THREE.Object3D[];
@@ -37,11 +38,44 @@ function fluff<G extends THREE.BufferGeometry>(geo: G, amt: number): G {
   geo.computeVertexNormals(); return geo;
 }
 
+// On a birthday the glass ornament becomes a latex balloon: an egg, wider at the top, with a short neck
+// below NECK that pulls down into the knot. `v` is height on the sphere (-1 to 1). The shell scales
+// sideways by k and moves to height g.
+const NECK = 0.6;
+function balloon(v: number) {
+  const q = Math.max(0, (-v - NECK) / (1 - NECK)), dq = v < -NECK ? -1 / (1 - NECK) : 0, egg = 1 + 0.1 * v, pinch = 1 - 0.4 * q * q;
+  return { k: egg * pinch, dk: 0.1 * pinch - egg * 0.8 * q * dq, g: 1.08 * v - 0.12 * q ** 3, dg: 1.08 - 0.36 * q * q * dq };
+}
+const B_TOP = balloon(1).g, B_TIP = -balloon(-1).g, KNOT_H = 0.13;
+
+/** How far the shell reaches above and below its center at birthday weight `w`, before scaling. */
+export const reach = (w: number) => ({ up: BAUBLE_R * lerp(1, B_TOP, w), down: BAUBLE_R * lerp(1, B_TIP, w) + KNOT_H * w });
+
+/** Adds the balloon shape as morph target 0. Normals use the inverse transpose of the map's Jacobian. */
+function balloonMorph<G extends THREE.BufferGeometry>(geo: G): G {
+  const p = geo.attributes.position, n = geo.attributes.normal, nv = new THREE.Vector3();
+  const P = new Float32Array(p.count * 3), N = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i), nx = n.getX(i), ny = n.getY(i), nz = n.getZ(i), b = balloon(y / BAUBLE_R);
+    P.set([x * b.k, BAUBLE_R * b.g, z * b.k], i * 3);
+    nv.set(nx * b.dg, ny * b.k - (b.dk / BAUBLE_R) * (x * nx + z * nz), nz * b.dg).normalize();
+    N.set([nv.x, nv.y, nv.z], i * 3);
+  }
+  geo.morphAttributes.position = [new THREE.BufferAttribute(P, 3)];
+  geo.morphAttributes.normal = [new THREE.BufferAttribute(N, 3)];
+  return geo;
+}
+
+// Every value stays above zero in both looks, so the shader program never recompiles mid transition.
+const GLASS = { metalness: 0.78, roughness: 0.13, clearcoat: 1, clearcoatRoughness: 0.04, iridescence: 0.45, envMapIntensity: 1.5 };
+const LATEX: typeof GLASS = { metalness: 0.02, roughness: 0.4, clearcoat: 0.55, clearcoatRoughness: 0.16, iridescence: 0.05, envMapIntensity: 0.8 };
+const LOOK = Object.keys(GLASS) as (keyof typeof GLASS)[];
+
 const PARTY_COLS: [string, string][] = [['#ff6f9c', '#fff1f5'], ['#2fb9b4', '#effffd'], ['#8e6bff', '#f4f0ff'], ['#ff9d3c', '#fff6e6'], ['#4f9bff', '#eef6ff'], ['#ff6b55', '#fff1ec'], ['#3fbf7f', '#effff5']];
 
 type Assets = {
   goldMat: THREE.MeshStandardMaterial; velvet: THREE.MeshPhysicalMaterial; fur: THREE.MeshPhysicalMaterial;
-  sphereGeo: THREE.SphereGeometry; capGeo: THREE.SphereGeometry; rimGeo: THREE.TorusGeometry;
+  sphereGeo: THREE.SphereGeometry; capGeo: THREE.SphereGeometry; rimGeo: THREE.TorusGeometry; knotGeo: THREE.LatheGeometry;
   hat: { cone: THREE.LatheGeometry; brim: THREE.TorusGeometry; pom: THREE.IcosahedronGeometry; tip: THREE.Vector3 };
   party: { cone: THREE.LatheGeometry; ruffle: THREE.TorusGeometry; pom: THREE.IcosahedronGeometry };
 };
@@ -58,7 +92,10 @@ function assets(): Assets {
   const cp = capGeo.attributes.position, uv = capGeo.attributes.uv;
   for (let i = 0; i < cp.count; i++) uv.setXY(i, cp.getX(i) / (2 * rc) + 0.5, cp.getY(i) / (2 * rc) + 0.5);
   uv.needsUpdate = true;
-  const rimGeo = new THREE.TorusGeometry(rc, 0.03, 14, 120);
+  balloonMorph(sphereGeo); balloonMorph(capGeo);
+  const rimGeo = balloonMorph(new THREE.TorusGeometry(rc, 0.03, 14, 120).translate(0, 0, BAUBLE_R * Math.cos(CAP_THETA)));
+  const knotGeo = new THREE.LatheGeometry(new THREE.SplineCurve(([[0.001, -KNOT_H], [0.035, -0.125], [0.055, -0.105], [0.048, -0.08], [0.026, -0.055],
+    [0.022, -0.03], [0.034, 0], [0.05, 0.03]] as const).map(([r, y]) => new THREE.Vector2(r, y))).getPoints(32), 24);
   const h = 0.94, pts: THREE.Vector2[] = [];
   for (let i = 0; i <= 26; i++) { const t = i / 26; pts.push(new THREE.Vector2(0.285 * Math.pow(1 - t, 0.85) + 0.004, t * h)); }
   const cone = new THREE.LatheGeometry(pts, 44);
@@ -68,7 +105,7 @@ function assets(): Assets {
   const pp: THREE.Vector2[] = [];
   for (let i = 0; i <= 20; i++) { const t = i / 20; pp.push(new THREE.Vector2(0.235 * (1 - t) * (1 - 0.08 * Math.sin(t * Math.PI)) + 0.003, t * 0.74)); }
   A = {
-    goldMat, velvet, fur, sphereGeo, capGeo, rimGeo,
+    goldMat, velvet, fur, sphereGeo, capGeo, rimGeo, knotGeo,
     hat: { cone, brim: fluff(new THREE.TorusGeometry(0.29, 0.088, 18, 60).rotateX(Math.PI / 2), 0.022), pom: fluff(new THREE.IcosahedronGeometry(0.115, 5), 0.01), tip: V3(0.64, h - 0.32, 0) },
     party: { cone: new THREE.LatheGeometry(pp, 40), ruffle: fluff(new THREE.TorusGeometry(0.235, 0.04, 10, 48).rotateX(Math.PI / 2), 0.02), pom: fluff(new THREE.IcosahedronGeometry(0.075, 4), 0.02) },
   };
@@ -164,12 +201,12 @@ export function addBauble(m: SceneMember, tex: THREE.Texture | null, st: Status,
   const a = assets();
   const root = new THREE.Group(), yaw = new THREE.Group(), wob = new THREE.Group(), hatBox = new THREE.Group();
   root.add(yaw); yaw.add(wob);
-  const glass = new THREE.MeshPhysicalMaterial({ color: m.glass, metalness: 0.78, roughness: 0.13, clearcoat: 1, clearcoatRoughness: 0.04,
-    iridescence: 0.45, iridescenceIOR: 1.45, iridescenceThicknessRange: [180, 520], envMapIntensity: 1.5 });
-  const sphere = new THREE.Mesh(a.sphereGeo, glass);
+  const skin = new THREE.MeshPhysicalMaterial({ color: m.glass, ...GLASS, iridescenceIOR: 1.45, iridescenceThicknessRange: [180, 520] });
+  const sphere = new THREE.Mesh(a.sphereGeo, skin);
   const faceMat = new THREE.MeshPhysicalMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.5, roughness: 0.42, metalness: 0, clearcoat: 0.8, clearcoatRoughness: 0.06, envMapIntensity: 0.32 });
   const face = new THREE.Mesh(a.capGeo, faceMat);
-  const rim = new THREE.Mesh(a.rimGeo, a.goldMat); rim.position.z = BAUBLE_R * Math.cos(CAP_THETA);
+  const rim = new THREE.Mesh(a.rimGeo, a.goldMat);
+  const knot = new THREE.Mesh(a.knotGeo, skin); knot.visible = false;
   const cap = makeCap(a); cap.position.y = BAUBLE_R - 0.03;
   const rig = (g: THREE.Group, y: number, rz: number): HatRig => ({ g, y, s0: g.scale.clone(), rz });
   const santa = makeSanta(a); santa.rotation.z = m.tilt; if (m.tilt > 0) santa.scale.x = -1;
@@ -177,7 +214,7 @@ export function addBauble(m: SceneMember, tex: THREE.Texture | null, st: Status,
   const partyGold = makeParty(a, m.slot, true); partyGold.rotation.z = m.tilt * 0.5; partyGold.scale.setScalar(1.12);
   const hats: Record<HatName, HatRig> = { santa: rig(santa, BAUBLE_R + 0.05, m.tilt), party: rig(party, BAUBLE_R + 0.03, m.tilt * 0.5), partyGold: rig(partyGold, BAUBLE_R + 0.03, m.tilt * 0.5) };
   Object.values(hats).forEach(h => { h.g.position.y = h.y; h.g.visible = false; hatBox.add(h.g); });
-  wob.add(sphere, face, rim, cap, hatBox);
+  wob.add(sphere, face, rim, cap, knot, hatBox);
   const str = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(22 * 3), 3)),
     new THREE.LineBasicMaterial({ color: 0xffe6f0, transparent: true, opacity: 0, depthWrite: false }));
   str.frustumCulled = false; str.layers.enable(L_SOLID); S.scene.add(str);
@@ -188,7 +225,7 @@ export function addBauble(m: SceneMember, tex: THREE.Texture | null, st: Status,
   const tgt = orbTargets(st).get(m.id);
   const base = tgt ? tgt.pos.clone() : V3(0, 0, 0);
   const b: Bauble = {
-    id: m.id, faceMat, root, yaw, wob, hatBox, hats, hat: null, base, fwd: fwdFor(base), hits,
+    id: m.id, faceMat, skin, shell: [sphere, face, rim], cap, knot, root, yaw, wob, hatBox, hats, hat: null, base, fwd: fwdFor(base), hits,
     fo: 0, dimS: 1, modeS: tgt?.scale ?? 1, phase: Math.random() * 10, wobA: 0, wobV: 0, hatA: 0, hatV: 0, sc: 1, scV: 0,
     pop: pop ? 0 : 1, dropY: 0, labelAlpha: pop ? 0 : 1, hover: false, str,
   };
@@ -234,9 +271,15 @@ export function setFocusPose(id: MemberId | null) {
 }
 
 export function updateBaubles(dt: number, t: number) {
-  const { WT, camera } = S;
-  const amp = 0.07 + 0.12 * WT.bday, sway = 0.035 + 0.05 * WT.bday;
+  const { WT, camera } = S, w = WT.bday;
+  const amp = 0.07 + 0.12 * w, sway = 0.035 + 0.05 * w;
   for (const b of baubles.values()) {
+    for (const k of LOOK) b.skin[k] = lerp(GLASS[k], LATEX[k], w);
+    b.skin.emissive.copy(b.skin.color).multiplyScalar(0.12 * w);
+    for (const s of b.shell) s.morphTargetInfluences![0] = w;
+    b.cap.scale.setScalar(Math.max(0.0001, 1 - w)); b.cap.visible = w < 0.99;
+    b.knot.scale.setScalar(Math.max(0.0001, w)); b.knot.visible = w > 0.01; b.knot.position.y = -BAUBLE_R * lerp(1, B_TIP, w);
+    b.hatBox.position.y = BAUBLE_R * (B_TOP - 1) * w;
     const target = (b.hover ? 1.08 : 1) * (S.interaction === 'focus' && S.focus === b.id ? 1.04 : 1);
     const steps = Math.max(1, Math.ceil(dt / 0.012)), h = dt / steps;
     for (let s = 0; s < steps; s++) {
@@ -247,21 +290,22 @@ export function updateBaubles(dt: number, t: number) {
     b.wobA = clamp(b.wobA, -0.9, 0.9); b.hatA = clamp(b.hatA, -1.2, 1.2); b.sc = clamp(b.sc, 0.6, 1.5);
     b.root.position.set(b.base.x + b.fwd.x * 1.7 * b.fo, b.base.y + Math.sin(t * 0.9 + b.phase) * amp + b.dropY + 0.12 * b.fo, b.base.z + b.fwd.z * 1.7 * b.fo);
     b.yaw.rotation.y = Math.atan2(camera.position.x - b.root.position.x, camera.position.z - b.root.position.z);
-    b.wob.rotation.z = b.wobA + Math.sin(t * 0.7 + b.phase) * sway;
+    b.wob.rotation.z = b.wobA + Math.sin(t * 0.7 + b.phase) * sway - 0.06 * b.base.x * w;
     b.wob.rotation.x = Math.sin(t * 0.5 + b.phase * 2) * 0.03;
     b.hatBox.rotation.z = b.hatA;
     b.root.scale.setScalar(Math.max(0.0001, b.sc * b.pop * b.dimS * b.modeS));
   }
 }
 
-/** Balloon strings from each ornament down to the cake. */
+/** Balloon strings from each knot down to the cake. */
 export function updateStrings(t: number) {
   const w = S.WT.bday;
   for (const b of baubles.values()) {
     const vis = w > 0.01 && b.pop > 0.2;
     b.str.visible = vis; if (!vis) continue;
     b.str.material.opacity = 0.5 * w * Math.min(1, b.pop);
-    const top = b.root.position.clone(); top.y -= BAUBLE_R * b.root.scale.y * 0.98;
+    b.knot.updateWorldMatrix(true, false);
+    const top = b.knot.localToWorld(V3(0, -KNOT_H, 0));
     const end = V3(top.x * 0.18, CAKE.tiers[2].y1 + 0.02, top.z * 0.18 + 0.25);
     if (Math.abs(top.x) < 0.3) end.set(top.x * 0.5, CAKE.flameY + 0.2, top.z * 0.6);
     const mid = top.clone().lerp(end, 0.5); mid.x += Math.sin(t * 0.9 + b.phase) * 0.25; mid.z += Math.cos(t * 0.7 + b.phase) * 0.15; mid.y -= 0.25;

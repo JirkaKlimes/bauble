@@ -16,7 +16,7 @@ PocketBase binary serves everything: the site, the API, realtime updates and the
 
 <p align="center">
   <img src="docs/phone-birthday.webp" width="31%"
-       alt="Four days before Mum's birthday: the ornaments wear party hats around a glowing cake">
+       alt="Four days before Mum's birthday: the ornaments are balloons in party hats, tied to a glowing cake">
   &nbsp;
   <img src="docs/phone-quiet.webp" width="31%"
        alt="The quiet months: ornaments drift under a moon made of stars, upcoming occasions below">
