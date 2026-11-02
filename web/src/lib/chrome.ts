@@ -52,6 +52,8 @@ export function showModal(m: HTMLElement) {
   if (m.firstElementChild) gsap.fromTo(m.firstElementChild, { y: 40, opacity: 0, scale: 0.96 }, { y: 0, opacity: 1, scale: 1, duration: 0.8, ease: 'expo.out', delay: 0.1 });
 }
 
+// No clearProps: the modal is fixed, so GSAP takes it for detached and reinserts it to measure transforms.
+// It lands after Svelte's block anchor and survives the unmount.
 export function hideModal(m: HTMLElement, done: () => void) {
-  gsap.to(m, { opacity: 0, duration: reduced ? 0.01 : 0.3, onComplete: () => { gsap.set([m, m.firstElementChild], { clearProps: 'all' }); done(); } });
+  gsap.to(m, { opacity: 0, duration: reduced ? 0.01 : 0.3, onComplete: done });
 }
