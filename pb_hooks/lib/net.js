@@ -79,6 +79,43 @@ function jsonLdPrice(html) {
   return null;
 }
 
+// "38.95", "1,299.00", "1 299,90", "1.299,90" and plain numbers
+function parseAmount(raw) {
+  let s = String(raw == null ? "" : raw).replace(/[\s\u00a0']/g, "");
+  const dot = s.lastIndexOf("."), comma = s.lastIndexOf(",");
+  if (dot >= 0 && comma >= 0) s = dot > comma ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, "");
+  else if (/^\d{1,3}(\.\d{3}){2,}$/.test(s)) s = s.replace(/\./g, "");
+  else s = s.replace(",", ".");
+  const n = Number(s);
+  return isFinite(n) && n > 0 ? n : null;
+}
+
+const CNB_RATES = "https://www.cnb.cz/cs/financni-trhy/devizovy-trh/kurzy-devizoveho-trhu/kurzy-devizoveho-trhu/denni_kurz.txt";
+
+// CZK for one unit of `code`, from the Czech National Bank daily fixing.
+function czkRate(code) {
+  if (!code || code === "CZK") return 1;
+  let res;
+  try { res = fetchURL(CNB_RATES, "text/plain", 5); } catch (_) { return null; }
+  if (res.statusCode !== 200) return null;
+  for (const line of toString(res.body, 100000).split("\n")) {
+    const f = line.split("|");
+    if (f.length === 5 && f[3] === code) {
+      const rate = Number(f[4].replace(",", ".")), qty = Number(f[2]);
+      return rate > 0 && qty > 0 ? rate / qty : null;
+    }
+  }
+  return null;
+}
+
+function priceCZK(raw, currency) {
+  const amount = parseAmount(raw);
+  if (!amount) return null;
+  const rate = czkRate(String(currency || "").trim().toUpperCase());
+  return rate ? Math.round(amount * rate) : null;
+}
+
 function absolute(u, base) {
   if (!u) return "";
   if (/^https?:\/\//i.test(u)) return u;
@@ -105,13 +142,11 @@ function preview(e) {
   let price = meta(html, ["product:price:amount", "og:price:amount", "price"]);
   let currency = meta(html, ["product:price:currency", "og:price:currency", "priceCurrency"]);
   if (!price) { const j = jsonLdPrice(html); if (j) { price = String(j.price); currency = currency || j.currency; } }
-  const num = parseFloat(String(price).replace(/\s/g, "").replace(",", "."));
   return e.json(200, {
     ok: !!title,
     title,
     image: allowedURL(image) ? image : "",
-    price: isFinite(num) && num > 0 ? Math.round(num) : null,
-    currency: String(currency || "").toUpperCase().slice(0, 3),
+    price: priceCZK(price, currency),
     store: url.match(/^https?:\/\/(?:www\.)?([^/?#:]+)/i)[1].toLowerCase(),
   });
 }
